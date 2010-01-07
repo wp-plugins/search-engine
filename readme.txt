@@ -3,9 +3,11 @@ Contributors: sc0ttkclark, cadillacandy
 Donate link: http://www.scottkclark.com/
 Tags: search engine, spider, index, search
 
-A search engine for WordPress that indexes pages on a site and provides comprehensive functionality.
+Currently in development - A search engine for WordPress that indexes pages on a site and provides comprehensive functionality.
 
 == Description ==
+
+**Currently in development**
 
 A search engine for WordPress that indexes pages on a site and provides comprehensive functionality.
 
