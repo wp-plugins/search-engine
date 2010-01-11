@@ -1,7 +1,8 @@
 === Search Engine ===
-Contributors: sc0ttkclark, cadillacandy, Nathan Parikh, David J. Bisset, Philip M. Hofer (Frumph)
+Contributors: sc0ttkclark, cadillacandy
 Donate link: http://www.scottkclark.com/
 Tags: search engine, spider, index, search
+Stable tag: 0.0.0
 
 Currently in development - Not intended for download and use on LIVE sites! - A search engine for WordPress that indexes pages on a site and provides comprehensive functionality.
 
