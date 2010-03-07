@@ -447,7 +447,7 @@ class Search_Engine_Admin
         if($this->table===false)
             return $this->message('<strong>Error:</strong> Invalid Configuration - Missing "table" definition.');
         global $wpdb;
-        $check = $wpdb->query($wpdb->prepare("DELETE FROM $this->table WHERE `id`=%f",array($this->id)));
+        $check = $wpdb->query($wpdb->prepare("DELETE FROM $this->table WHERE `id`=%d",array($this->id)));
         if($check)
             $this->message("<strong>Deleted:</strong> $this->item has been deleted.");
         else
@@ -510,14 +510,14 @@ class Search_Engine_Admin
             {
                 if($attributes['type']=='bool')
                 {
-                    $vartype = '%f';
+                    $vartype = '%d';
                     $value = 0;
                     if(isset($_POST[$column]))
                         $value = 1;
                 }
                 elseif($attributes['type']=='number')
                 {
-                    $vartype = '%f';
+                    $vartype = '%d';
                     $value = number_format($_POST[$column],0,'','');
                 }
                 elseif($attributes['type']=='decimal')
@@ -540,7 +540,7 @@ class Search_Engine_Admin
         {
             $this->insert_id = $this->id;
             $values[] = $this->id;
-            $check = $wpdb->query($wpdb->prepare("UPDATE $this->table SET $column_sql WHERE id=%f",$values));
+            $check = $wpdb->query($wpdb->prepare("UPDATE $this->table SET $column_sql WHERE id=%d",$values));
         }
         else
         {

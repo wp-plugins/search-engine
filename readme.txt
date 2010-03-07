@@ -1,10 +1,10 @@
 === Search Engine ===
 Contributors: sc0ttkclark
 Donate link: http://www.scottkclark.com/
-Tags: search engine, spider, index, search, google
+Tags: search engine, spider, index, search, google, buddypress, full search, wordpress search
 Requires at least: 2.9.2
 Tested up to: 3.0
-Stable tag: 0.4.2
+Stable tag: 0.4.3
 
 THIS IS A BETA VERSION - Currently in development - A search engine for WordPress that indexes ALL of your site and provides comprehensive search.
 
@@ -24,25 +24,41 @@ What if my site or parts of my site is password protected? Currently, only htacc
 
 == Changelog ==
 
-= 0.4.0 =
-* First official release to the public as a plugin
-
-= 0.4.1 =
-* Bug fixes: Inclusion of SQL :-) and fix in Admin.class.php
+= 0.4.3 =
+* Tweaks to CSS to make it work in other themes
+* Added SEARCH_ENGINE_CUSTOM_CSS check to see if it's defined, if so - don't use the CSS provided by the plugin
+* Added 'css' parameter in the shortcode, [search_engine sites='1,3,4' css='0'] which when set to 0, it will not output CSS
+* Description excerpts on results
+* Index exclusion of &lt;script&gt; content
+* No longer looking for links in &lt;pre&gt; and &lt;code&gt; tags
 
 = 0.4.2 =
 * Bug fixes for Spider.class.php
 
-== Upgrade Notice ==
+= 0.4.1 =
+* Bug fixes: Inclusion of SQL :-) and fix in Admin.class.php
 
 = 0.4.0 =
-You aren't using the real plugin, upgrade and you enjoy what you originally downloaded this for!
+* First official release to the public as a plugin
+
+== Upgrade Notice ==
+
+= 0.4.3 =
+* Tweaks to CSS to make it work in other themes
+* Added SEARCH_ENGINE_CUSTOM_CSS check to see if it's defined, if so - don't use the CSS provided by the plugin
+* Added 'css' parameter in the shortcode, [search_engine sites='1,3,4' css='0'] which when set to 0, it will not output CSS
+* Description excerpts on results
+* Index exclusion of &lt;script&gt; content
+* No longer looking for links in &lt;pre&gt; and &lt;code&gt; tags
+
+= 0.4.2 =
+Bug fixes for Spider.class.php
 
 = 0.4.1 =
 You probably don't see this plugin working at all, upgrade and I promise it will work :-)
 
-= 0.4.2 =
-Bug fixes for Spider.class.php
+= 0.4.0 =
+You aren't using the real plugin, upgrade and you enjoy what you originally downloaded this for!
 
 == Installation ==
 

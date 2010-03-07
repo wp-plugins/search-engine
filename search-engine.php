@@ -3,7 +3,7 @@
 Plugin Name: Search Engine
 Plugin URI: http://www.scottkclark.com/wordpress/search-engine/
 Description: THIS IS A BETA VERSION - Currently in development - A search engine for WordPress that indexes ALL of your site and provides comprehensive search.
-Version: 0.4.2
+Version: 0.4.3
 Author: Scott Kingsley Clark
 Author URI: http://www.scottkclark.com/
 
@@ -788,7 +788,9 @@ function search_engine_get_posts ( $posts ) {
     add_action( 'loop_start', 'search_engine_loop_start' );
     add_action( 'loop_end', 'search_engine_loop_end' );
 
-    wp_enqueue_style('search-engine',WP_PLUGIN_URL.'/search-engine/assets/style.css');
+    // Send out the CSS team to clean up everything and make it oh so pretty
+    if(!defined('SEARCH_ENGINE_CUSTOM_CSS'))
+        wp_enqueue_style('search-engine',WP_PLUGIN_URL.'/search-engine/assets/style.css');
 
     // We let the user optionally choose a different search template to use
     add_filter('template_redirect','search_engine_template');
@@ -860,10 +862,14 @@ function search_engine_content ($atts=false)
         return;
     $site_id = $site['id'];
     $site_ids = array($site_id);
+    $css = 1;
     if($atts!==false)
     {
-        $atts = shortcode_atts(array('sites'=>$site_id),$atts);
+        $atts = shortcode_atts(array('sites'=>$site_id,'css'=>1),$atts);
         $site_ids = explode(',',$atts['sites']);
+        $css = $atts['css'];
+        if($css!=1)
+            $css = 0;
     }
     include_once SEARCH_ENGINE_DIR.'/classes/Search.class.php';
     $query = '';
@@ -878,7 +884,7 @@ function search_engine_content ($atts=false)
     }
     $search->results_per_page = 10;
     $results = $search->search_build_query($query);
-    if(!wp_style_is('search-engine')&&!isset($search_engine['css_output']))
+    if(!wp_style_is('search-engine')&&!isset($search_engine['css_output'])&&$css==1&&!defined('SEARCH_ENGINE_CUSTOM_CSS'))
     {
         $search_engine['css_output'] =1;
 ?>
@@ -933,6 +939,19 @@ function search_engine_content ($atts=false)
         {
             if(empty($result->description))
                 $result->description = $result->fulltxt;
+            $text = $result->description;
+            $text = apply_filters('the_content', $text);
+            $text = str_replace(']]>', ']]&gt;', $text);
+            $text = strip_tags($text);
+            $excerpt_length = apply_filters('excerpt_length', 55);
+            $excerpt_more = apply_filters('excerpt_more', ' ' . '...');
+            $words = explode(' ', $text, $excerpt_length + 1);
+            if (count($words) > $excerpt_length) {
+                array_pop($words);
+                $text = implode(' ', $words);
+                $text = $text . $excerpt_more;
+            }
+            $result->description = $text;
 ?>
     <li>
         <h3 class="search_engine_Title"><a href="<?php echo $result->url; ?>"><?php echo $result->title; ?></a></h3>

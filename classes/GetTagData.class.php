@@ -3,6 +3,7 @@ function get_tag_data( $data, $tags = false, $filters = false ) {
     $data = preg_replace( '/<!--.*?-->/ms', '', $data );
     $data = preg_replace( '/<pre.*?</pre>/ms', '', $data );
     $data = preg_replace( '/<code.*?</code>/ms', '', $data );
+    $data = preg_replace( '/<script.*?</script>/ms', '', $data );
 	$data_parser = new GetTagData();
 
 	if ( is_file( $data ) || preg_match( '{^(?:http|ftp)://}', $data ) )
