@@ -876,6 +876,7 @@ function search_engine_content ($atts=false)
     {
         $search->page = $_GET['pg'];
     }
+    $search->results_per_page = 10;
     $results = $search->search_build_query($query);
     if(!wp_style_is('search-engine')&&!isset($search_engine['css_output']))
     {
