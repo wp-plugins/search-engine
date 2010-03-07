@@ -65,7 +65,7 @@ class Search_Engine_API
         $link_id = @current($wpdb->get_col($wpdb->prepare("SELECT id FROM $this->table_links WHERE `url`=%s AND `site`=%f",array($params['url'], $params['site']))));
         if(is_numeric($link_id))
         {
-            $wpdb->query($wpdb->prepare("UPDATE $this->table_links SET `title`=%s,`description`=%s,`fulltxt`=%s,`lastmod`=%s,`updated`=UNIX_TIMESTAMP(),`size`=%d,`md5_checksum`=%s,`level`=%f WHERE id=$link_id",
+            $wpdb->query($wpdb->prepare("UPDATE $this->table_links SET `title`=%s,`description`=%s,`fulltxt`=%s,`lastmod`=%s,`updated`=FROM_UNIXTIME(UNIX_TIMESTAMP()),`size`=%d,`md5_checksum`=%s,`level`=%f WHERE id=$link_id",
                     array($params['title'], $params['description'], $params['fulltxt'], $params['lastmod'], $params['size'], $params['md5_checksum'], $params['level'])));
             foreach($params['keywords'] as $keyword_id=>$weight)
             {
@@ -85,7 +85,7 @@ class Search_Engine_API
         }
         else
         {
-            $wpdb->query($wpdb->prepare("INSERT INTO $this->table_links (`site`,`url`,`title`,`description`,`fulltxt`,`lastmod`, `indexed`,`updated`,`size`,`md5_checksum`,`level`) VALUES ( %f, %s, %s, %s, %s, %s, UNIX_TIMESTAMP(), UNIX_TIMESTAMP(), %d, %s, %f )",
+            $wpdb->query($wpdb->prepare("INSERT INTO $this->table_links (`site`,`url`,`title`,`description`,`fulltxt`,`lastmod`, `indexed`,`updated`,`size`,`md5_checksum`,`level`) VALUES ( %f, %s, %s, %s, %s, %s, FROM_UNIXTIME(UNIX_TIMESTAMP()), FROM_UNIXTIME(UNIX_TIMESTAMP()), %d, %s, %f )",
                     array($params['site'], $params['url'], $params['title'], $params['description'], $params['fulltxt'], $params['lastmod'], $params['size'], $params['md5_checksum'], $params['level'])));
             $link_id = $wpdb->insert_id;
             foreach($params['keywords'] as $keyword_id=>$weight)
@@ -145,13 +145,13 @@ class Search_Engine_API
         $site_id = @current($wpdb->get_col($wpdb->prepare("SELECT id FROM $this->table_templates WHERE `host`=%s AND ",array($params['host'],$params['scheme']))));
         if(is_numeric($site_id))
         {
-            $wpdb->query($wpdb->prepare("UPDATE $this->table_templates SET `group`=%f,`protocol`=%s,`updated`=UNIX_TIMESTAMP() WHERE id=$site_id",
+            $wpdb->query($wpdb->prepare("UPDATE $this->table_templates SET `group`=%f,`protocol`=%s,`updated`=FROM_UNIXTIME(UNIX_TIMESTAMP()) WHERE id=$site_id",
                     array($params['group'], $params['protocol'])));
             return true;
         }
         else
         {
-            $wpdb->query($wpdb->prepare("INSERT INTO $this->table_templates (`group`,`host`,`scheme`,`updated`) VALUES ( %f, %s, %s, UNIX_TIMESTAMP() )",
+            $wpdb->query($wpdb->prepare("INSERT INTO $this->table_templates (`group`,`host`,`scheme`,`updated`) VALUES ( %f, %s, %s, FROM_UNIXTIME(UNIX_TIMESTAMP()) )",
                     array($params['group'], $params['host'], $params['scheme'])));
             return $wpdb->insert_id;
         }
@@ -163,7 +163,7 @@ class Search_Engine_API
             return false;
         }
         global $wpdb;
-        $check = $wpdb->query($wpdb->prepare("UPDATE $this->table_templates SET `indexed`=UNIX_TIMESTAMP() WHERE id=%f",array($params['id'])));
+        $check = $wpdb->query($wpdb->prepare("UPDATE $this->table_templates SET `indexed`=FROM_UNIXTIME(UNIX_TIMESTAMP()) WHERE id=%f",array($params['id'])));
         return $check;
     }
     function delete_template ($params)
@@ -216,13 +216,13 @@ class Search_Engine_API
         $site_id = @current($wpdb->get_col($wpdb->prepare("SELECT id FROM $this->table_sites WHERE `host`=%s AND ",array($params['host'],$params['scheme']))));
         if(is_numeric($site_id))
         {
-            $wpdb->query($wpdb->prepare("UPDATE $this->table_sites SET `group`=%f,`protocol`=%s,`updated`=UNIX_TIMESTAMP() WHERE id=$site_id",
+            $wpdb->query($wpdb->prepare("UPDATE $this->table_sites SET `group`=%f,`protocol`=%s,`updated`=FROM_UNIXTIME(UNIX_TIMESTAMP()) WHERE id=$site_id",
                     array($params['group'], $params['protocol'])));
             return true;
         }
         else
         {
-            $wpdb->query($wpdb->prepare("INSERT INTO $this->table_sites (`group`,`host`,`scheme`,`updated`) VALUES ( %f, %s, %s, UNIX_TIMESTAMP() )",
+            $wpdb->query($wpdb->prepare("INSERT INTO $this->table_sites (`group`,`host`,`scheme`,`updated`) VALUES ( %f, %s, %s, FROM_UNIXTIME(UNIX_TIMESTAMP()) )",
                     array($params['group'], $params['host'], $params['scheme'])));
             return $wpdb->insert_id;
         }
@@ -234,7 +234,7 @@ class Search_Engine_API
             return false;
         }
         global $wpdb;
-        $check = $wpdb->query($wpdb->prepare("UPDATE $this->table_sites SET `indexed`=UNIX_TIMESTAMP() WHERE id=%f",array($params['id'])));
+        $check = $wpdb->query($wpdb->prepare("UPDATE $this->table_sites SET `indexed`=FROM_UNIXTIME(UNIX_TIMESTAMP()) WHERE id=%f",array($params['id'])));
         return $check;
     }
     function delete_site ($params)

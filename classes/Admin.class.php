@@ -10,7 +10,7 @@ if(!is_object($wpdb))
  * Admin UI class for WordPress plugins
  *
  * Creates a UI for any plugn screens within WordPress
- * 
+ *
  * NOTE: If you are including this class in a plugin,
  * please rename it to avoid conflicts with other plugins
  *

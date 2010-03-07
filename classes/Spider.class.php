@@ -43,6 +43,7 @@ class Search_Engine_Spider
     var $allowed_hosts = false;
     var $domain_scope = false;
     var $current_host = false;
+    var $current_scheme = false;
 
     var $robotstxt_check = false;
     var $robotstxt_rules = false;
@@ -70,6 +71,7 @@ class Search_Engine_Spider
         $this->site_id = $site['id'];
         $this->domain_scope = $site['host'];
         $this->current_host = $site['host'];
+        $this->current_scheme = $site['scheme'];
     }
     function set_template ($template_id)
     {
@@ -100,6 +102,7 @@ class Search_Engine_Spider
         $this->site_id = $site['id'];
         $this->domain_scope = $site['host'];
         $this->current_host = $site['host'];
+        $this->current_scheme = $site['scheme'];
     }
 
     function spider ($url=false,$manual_depth=false)
@@ -149,7 +152,7 @@ class Search_Engine_Spider
                     $this->api->bump_site(array('id'=>$this->site_id));
                 if(false!==$this->template_id)
                     $this->api->bump_template(array('id'=>$this->template_id));
-                $this->message('<strong>Final Report</strong><ul><li><strong>Links Processed:</strong> '.count($this->links_processed).'</li><li><strong>Links Spidered:</strong> '.count($this->links_spidered).'</li><li><strong>Links Excluded:</strong> '.count($this->links_excluded).'</li><li><strong>Links Redirected:</strong> '.count($this->links_redirected).'</li><li><strong>Links Not Found:</strong> '.count($this->links_notfound).'</li><li><strong>Links With Server Errors:</strong> '.count($this->links_servererror).'</li><li><strong>Links Non-HTML Content Types:</strong> '.count($this->links_other).'</li></ul>');
+                $this->message('<strong>Final Report</strong><ul><li><strong>Links Found:</strong> '.count($this->links).'</li><li><strong>Links Processed:</strong> '.count($this->links_processed).'</li><li><strong>Links Spidered:</strong> '.count($this->links_spidered).'</li><li><strong>Links Excluded:</strong> '.count($this->links_excluded).'</li><li><strong>Links Redirected:</strong> '.count($this->links_redirected).'</li><li><strong>Links Not Found:</strong> '.count($this->links_notfound).'</li><li><strong>Links With Server Errors:</strong> '.count($this->links_servererror).'</li><li><strong>Links Non-HTML Content Types:</strong> '.count($this->links_other).'</li></ul>');
                 $this->message('<strong>Spidering Completed - Max Depth Reached</strong>');
                 return false;
             }
@@ -159,7 +162,7 @@ class Search_Engine_Spider
             $this->api->bump_site(array('id'=>$this->site_id));
         if(false!==$this->template_id)
             $this->api->bump_template(array('id'=>$this->template_id));
-        $this->message('<strong>Final Report</strong><ul><li><strong>Links Processed:</strong> '.count($this->links_processed).'</li><li><strong>Links Spidered:</strong> '.count($this->links_spidered).'</li><li><strong>Links Excluded:</strong> '.count($this->links_excluded).'</li><li><strong>Links Redirected:</strong> '.count($this->links_redirected).'</li><li><strong>Links Not Found:</strong> '.count($this->links_notfound).'</li><li><strong>Links With Server Errors:</strong> '.count($this->links_servererror).'</li><li><strong>Links Non-HTML Content Types:</strong> '.count($this->links_other).'</li></ul>');
+        $this->message('<strong>Final Report</strong><ul><li><strong>Links Found:</strong> '.count($this->links).'</li><li><strong>Links Processed:</strong> '.count($this->links_processed).'</li><li><strong>Links Spidered:</strong> '.count($this->links_spidered).'</li><li><strong>Links Excluded:</strong> '.count($this->links_excluded).'</li><li><strong>Links Redirected:</strong> '.count($this->links_redirected).'</li><li><strong>Links Not Found:</strong> '.count($this->links_notfound).'</li><li><strong>Links With Server Errors:</strong> '.count($this->links_servererror).'</li><li><strong>Links Non-HTML Content Types:</strong> '.count($this->links_other).'</li></ul>');
         $this->message('<strong>Spidering Completed</strong>');
     }
     function brunch ($urls,$depth)
@@ -170,18 +173,9 @@ class Search_Engine_Spider
         $this->message('<strong>Status Update</strong><ul><li><strong>Links To Be Crunched:</strong> '.count($urls).'</li><li><strong>Links Queued:</strong> '.count($this->links_queued).'</li><li><strong>Links Processed:</strong> '.count($this->links_processed).'</li><li><strong>Links Spidered:</strong> '.count($this->links_spidered).'</li><li><strong>Links Excluded:</strong> '.count($this->links_excluded).'</li><li><strong>Links Redirected:</strong> '.count($this->links_redirected).'</li><li><strong>Links Not Found:</strong> '.count($this->links_notfound).'</li><li><strong>Links With Server Errors:</strong> '.count($this->links_servererror).'</li><li><strong>Links Non-HTML Content Types:</strong> '.count($this->links_other).'</li></ul>');
         foreach($links as $link)
         {
-            if(!in_array($link,$this->links))
-            {
-                $this->links_processed[] = $link;
-                $this->current_depth = $depth;
-                $this->crunch($link);
-            }
-            else
-            {
-                $key = array_search($link,$this->links_queued);
-                if($key!==false)
-                    unset($this->links_queued[$key]);
-            }
+            $this->links_processed[] = $link;
+            $this->current_depth = $depth;
+            $this->crunch($link);
         }
         if(!empty($this->links_queued))
         {
@@ -554,12 +548,6 @@ class Search_Engine_Spider
                 $this->robotstxt_rules = $rules;
         }
     }
-    function in_multiple_array ($needle,$haystacks)
-    {
-        foreach($haystacks as $haystack)
-            if(is_array($haystack)&&in_array($needle,$haystack))
-                return true;
-    }
     function check_url_structure ($url)
     {
         $invalid_common_extensions = array('3dm','3g2','3gp','7z','8bi','aac','accdb','ai','aif','app','asf','asx','avi','bak','bat','bin','blg','bmp','bup','c','cab','cfg','cgi','com','cpl','cpp','csv','cur','dat','db','dbx','deb','dll','dmg','dmp','doc','docx','drv','drw','dwg','dxf','efx','eps','exe','flv','fnt','fon','gam','gho','gif','gz','hqx','iff','indd','ini','iso','java','jpg','key','keychain','lnk','log','m3u','m4a','m4p','mdb','mid','mim','mov','mp3','mp4','mpa','mpg','mpeg','msg','msi','nes','ori','otf','pages','part','pct','pdb','pdf','pif','pkg','pl','pln','plugin','png','pps','ppt','pptx','prf','ps','psd','psp','qxd','qxp','ra','ram','rar','rels','rm','rom','rtf','sav','sdb','sdf','sit','sitx','sql','svg','swf','sys','tar.gz','thm','tif','tmp','toast','torrent','ttf','txt','uccapilog','uue','vb','vcd','vcf','vob','wav','wks','wma','wmv','wpd','wps','ws','xll','xls','xlsx','xml','yps','zip','zipx');
@@ -590,7 +578,6 @@ class Search_Engine_Spider
             {
                 if(in_array($link,$this->links))
                     continue;
-                $this->links[] = $link;
                 $check = @parse_url($link);
                 if(!$this->check_url_structure($link))
                 {
@@ -599,6 +586,14 @@ class Search_Engine_Spider
                         unset($this->links_queued[$key]);
                     $this->message('<strong>Invalid URL</strong>: '.$link);
                     continue;
+                }
+                if(!isset($check['host'])||empty($check['host']))
+                {
+                    $check['scheme'] = $this->current_scheme;
+                    $check['host'] = $this->current_host;
+                    $link = $check['scheme'].'://'.$check['host'].$link;
+                    if($check['path']=='')
+                        $link .= '/';
                 }
                 if($check!==false&&isset($check['path']))
                 {
@@ -620,19 +615,21 @@ class Search_Engine_Spider
                     }
                     if($this->url_exclusion($check['path'],$link)!==false)
                     {
-                        if($this->current_host!==false&&(!isset($check['host'])||$this->current_host==$check['host']))
-                            if($this->in_multiple_array('http://'.$this->current_host.$check['path'],array($this->links_queued,$this->links_spidered,$this->links_excluded,$this->links_redirected,$this->links_notfound)))
-                                continue;
-                        elseif($this->in_multiple_array($check['path'],array($this->links_queued,$this->links_spidered,$this->links_excluded,$this->links_redirected,$this->links_notfound)))
+                        if($this->current_host!==false&&$this->current_host!=$check['host'])
+                        {
                             continue;
-                        $ret[$k] = ($this->current_host!==false&&(!isset($check['host'])||$this->current_host==$check['host']))?'http://'.$this->current_host.((strpos($check['path'],'/')===false||0<strpos($check['path'],'/'))?'/':'').$check['path']:$link;
+                        }
+                        if(in_array($link,$this->links))
+                        {
+                            continue;
+                        }
+                        $ret[$k] = $link;
+                        $this->links[] = $link;
                     }
                     else
                         continue;
                 }
                 else
-                    continue;
-                if(in_array($ret[$k],$this->links))
                     continue;
                 $this->message('Found URL: '.$ret[$k]);
                 $k++;

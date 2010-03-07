@@ -151,7 +151,7 @@ class Search_Engine_Index
     }
     function get_keywords ($content)
     {
-        $content = ereg_replace("[^A-Za-z_\'-]", " ", $content);
+        $content = preg_replace("[^A-Za-z_\'-]", " ", $content);
         $content = str_replace(array(' - ',' _ ',' \' '),' ',' '.$content.' ');
         $content = str_ireplace($this->common_words,' ',' '.$content.' ');
         $keywords = explode(' ',$content);
