@@ -100,8 +100,8 @@ function search_engine_menu ()
     add_submenu_page('search-engine', 'XML Sitemaps', 'XML Sitemaps', $has_full_access ? "search_engine_full_access" : "search_engine_view_indexmaps", 'search-engine-xml-sitemaps', 'search_engine_xml_sitemaps');
     add_submenu_page('search-engine', 'Groups', 'Groups', $has_full_access ? "search_engine_full_access" : "search_engine_groups", 'search-engine-groups', 'search_engine_groups');
     add_submenu_page('search-engine', 'View Index', 'View Index', $has_full_access ? "search_engine_full_access" : "search_engine_view_index", 'search-engine-view-index', 'search_engine_view_index');
-    */
     add_submenu_page('search-engine', 'Search Settings', 'Search Settings', $has_full_access ? "search_engine_full_access" : "search_engine_search_settings", 'search-engine-search-settings', 'search_engine_search_settings');
+    */
     add_submenu_page('search-engine', 'View  Search Logs', 'View Search Logs', $has_full_access ? "search_engine_full_access" : "search_engine_logs", 'search-engine-logs', 'search_engine_logs');
     add_submenu_page('search-engine', 'About', 'About', 'read', 'search-engine-about', 'search_engine_about');
 }
@@ -684,7 +684,6 @@ function search_engine_about ()
                         <ul>
                             <li>Easy Indexing Wizard - Create Templates and Index Existing / New Sites</li>
                             <li>Index Templates - Reindex Sites via the Wizard or via cronjob.php</li>
-                            <li>Search Settings - Setup multiple searches on your site</li>
                             <li>View Search Logs - View queries recently typed, how long it took them to process, and how many results were returned</li>
                             <li>Admin.Class.php - A class for plugins to manage data using the WordPress UI appearance</li>
                         </ul>
@@ -728,6 +727,7 @@ function search_engine_about ()
                     <dt>0.5.0</dt>
                     <dd>
                         <ul>
+                            <li>Search Settings - Setup / control multiple searches on your site</li>
                             <li>AND / OR / "Exact Phrase" multi-combination Support</li>
                             <li>Cronjob Groups - Ability to run multiple templates at a time based on Cronjob Group in cronjob.php</li>
                             <li>Integration with wp_cron - Option to enable a template to rerun on it's own - like magic!</li>
