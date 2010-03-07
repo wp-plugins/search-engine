@@ -61,7 +61,7 @@ Search Engine - Support Forums: http://www.scottkclark.com/forums/search-engine/
 
 * Greg Dean - PHP Development for Search.class.php
 * Chris Jean from iThemes - PHP Development for Displaying Results on Search Pages
-* Randy Jansen - HTML / CSS Development for Wizard UI
+* Randy Jansen - HTML / CSS Development for Wizard UI and Search Results Template
 * cdharrison - Icon Consulting
 * Andy Weigel - PHP Consulting
 

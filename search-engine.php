@@ -689,7 +689,7 @@ function search_engine_about ()
                 <ul>
                     <li><a href="http://studioslice.com/">Greg Dean</a> - PHP Development for Search.class.php</li>
                     <li><a href="http://gaarai.com/">Chris Jean</a> from <a href="http://ithemes.com/">iThemes</a> - PHP Development for Displaying Results on Search Pages</li>
-                    <li><a href="http://randyjensenonline.com/">Randy Jansen</a> - HTML / CSS Development for Wizard UI</li>
+                    <li><a href="http://randyjensenonline.com/">Randy Jansen</a> - HTML / CSS Development for Wizard UI and Search Results Template</li>
                     <li><a href="http://cdharrison.com/">cdharrison</a> - Icon Consulting</li>
                     <li><a href="http://andyweigel.com/">Andy Weigel</a> - PHP Consulting</li>
                 </ul>
