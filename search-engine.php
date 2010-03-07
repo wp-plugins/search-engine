@@ -3,7 +3,7 @@
 Plugin Name: Search Engine
 Plugin URI: http://www.scottkclark.com/wordpress/search-engine/
 Description: THIS IS A BETA VERSION - Currently in development - A search engine for WordPress that indexes ALL of your site and provides comprehensive search.
-Version: 0.4.0
+Version: 0.4.1
 Author: Scott Kingsley Clark
 Author URI: http://www.scottkclark.com/
 
@@ -23,13 +23,34 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
 global $wpdb;
-define("SEARCH_ENGINE_TBL",$wpdb->prefix.'searchengine_');
+define('SEARCH_ENGINE_TBL',$wpdb->prefix.'searchengine_');
+define('SEARCH_ENGINE_VERSION','041');
+define('SEARCH_ENGINE_URL', WP_PLUGIN_URL . '/search-engine');
+define('SEARCH_ENGINE_DIR', WP_PLUGIN_DIR . '/search-engine');
 
 function search_engine_init ()
 {
-    global $current_user;
+    global $current_user,$wpdb;
     $capabilities = search_engine_capabilities();
 
+    // check version
+    $version = get_option('search_engine_version');
+    if(empty($version))
+    {
+        // thx pods ;)
+        $sql = file_get_contents(SEARCH_ENGINE_DIR.'/assets/dump.sql');
+        $sql_explode = preg_split("/;\n/", str_replace('wp_', $wpdb->prefix, $sql));
+        if(count($sql_explode)==1)
+            $sql_explode = preg_split("/;\r/", str_replace('wp_', $wpdb->prefix, $sql));
+        for ($i = 0, $z = count($sql_explode); $i < $z; $i++)
+        {
+            $wpdb->query($sql_explode[$i]);
+        }
+        delete_option('search_engine_version');
+        add_option('search_engine_version',SEARCH_ENGINE_VERSION);
+    }
+
+    // thx gravity forms, great way of integration with members!
     if ( function_exists( 'members_get_capabilities' ) ){
         add_filter('members_get_capabilities', 'search_engine_get_capabilities');
 
@@ -90,19 +111,22 @@ function search_engine_current_user_can_which ($caps)
 function search_engine_menu ()
 {
     $has_full_access = current_user_can("search_engine_full_access");
+    if(!$has_full_access&&current_user_can("administrator"))
+        $has_full_access = true;
+
     $min_cap = search_engine_current_user_can_which(search_engine_capabilities());
     if(empty($min_cap))
         $min_cap = "search_engine_full_access";
-    add_menu_page('Search Engine', 'Search Engine', $has_full_access ? "search_engine_full_access" : $min_cap, 'search-engine', null, WP_CONTENT_URL.'/plugins/search-engine/assets/icons/search_16.png');
-    add_submenu_page('search-engine', 'Wizard', 'Wizard', $has_full_access ? "search_engine_full_access" : "search_engine_index_templates", 'search-engine', 'search_engine_wizard');
-    add_submenu_page('search-engine', 'Index Templates', 'Index Templates', $has_full_access ? "search_engine_full_access" : "search_engine_index", 'search-engine-index', 'search_engine_index');
+    add_menu_page('Search Engine', 'Search Engine', $has_full_access ? "read" : $min_cap, 'search-engine', null, WP_PLUGIN_URL.'/search-engine/assets/icons/search_16.png');
+    add_submenu_page('search-engine', 'Wizard', 'Wizard', $has_full_access ? "read" : "search_engine_index_templates", 'search-engine', 'search_engine_wizard');
+    add_submenu_page('search-engine', 'Index Templates', 'Index Templates', $has_full_access ? "read" : "search_engine_index", 'search-engine-index', 'search_engine_index');
     /* COMING SOON! :-)
-    add_submenu_page('search-engine', 'XML Sitemaps', 'XML Sitemaps', $has_full_access ? "search_engine_full_access" : "search_engine_view_indexmaps", 'search-engine-xml-sitemaps', 'search_engine_xml_sitemaps');
-    add_submenu_page('search-engine', 'Groups', 'Groups', $has_full_access ? "search_engine_full_access" : "search_engine_groups", 'search-engine-groups', 'search_engine_groups');
-    add_submenu_page('search-engine', 'View Index', 'View Index', $has_full_access ? "search_engine_full_access" : "search_engine_view_index", 'search-engine-view-index', 'search_engine_view_index');
-    add_submenu_page('search-engine', 'Search Settings', 'Search Settings', $has_full_access ? "search_engine_full_access" : "search_engine_search_settings", 'search-engine-search-settings', 'search_engine_search_settings');
+    add_submenu_page('search-engine', 'XML Sitemaps', 'XML Sitemaps', $has_full_access ? "read" : "search_engine_view_indexmaps", 'search-engine-xml-sitemaps', 'search_engine_xml_sitemaps');
+    add_submenu_page('search-engine', 'Groups', 'Groups', $has_full_access ? "read" : "search_engine_groups", 'search-engine-groups', 'search_engine_groups');
+    add_submenu_page('search-engine', 'View Index', 'View Index', $has_full_access ? "read" : "search_engine_view_index", 'search-engine-view-index', 'search_engine_view_index');
+    add_submenu_page('search-engine', 'Search Settings', 'Search Settings', $has_full_access ? "read" : "search_engine_search_settings", 'search-engine-search-settings', 'search_engine_search_settings');
+    add_submenu_page('search-engine', 'View  Search Logs', 'View Search Logs', $has_full_access ? "read" : "search_engine_logs", 'search-engine-logs', 'search_engine_logs');
     */
-    add_submenu_page('search-engine', 'View  Search Logs', 'View Search Logs', $has_full_access ? "search_engine_full_access" : "search_engine_logs", 'search-engine-logs', 'search_engine_logs');
     add_submenu_page('search-engine', 'About', 'About', 'read', 'search-engine-about', 'search_engine_about');
 }
 function search_engine_wizard ()
@@ -273,7 +297,7 @@ function search_engine_wizard_run ()
             $token = md5(microtime().wp_generate_password(20,true));
         update_option('search_engine_token',$token);
     }
-    require_once "classes/API.class.php";
+    require_once SEARCH_ENGINE_DIR.'/classes/API.class.php';
     if(!empty($_POST))
     {
         if(!empty($_POST['site_url']))
@@ -300,7 +324,7 @@ function search_engine_wizard_run ()
             $site_id = $_POST['existing_site'];
         }
         $_POST['site'] = $site_id;
-        require_once "classes/Admin.class.php";
+        require_once SEARCH_ENGINE_DIR.'/classes/Admin.class.php';
         $columns = array('site'=>array('custom_relate'=>array('table'=>SEARCH_ENGINE_TBL.'sites','what'=>'host')),'indexed'=>array('label'=>'Date Indexed','type'=>'date'),'updated'=>array('label'=>'Last Modified','type'=>'date'),'id'=>array('label'=>'Template ID'));
         $form_columns = $columns;
         unset($form_columns['id']);
@@ -315,7 +339,7 @@ function search_engine_wizard_run ()
         $form_columns[] = 'whitelist_uri_words';
         $form_columns[] = 'htaccess_username';
         $form_columns[] = 'htaccess_password';
-        $admin = new Search_Engine_Admin(array('do'=>'create','item'=>'Index Template','items'=>'Index Templates','table'=>SEARCH_ENGINE_TBL.'templates','columns'=>$columns,'form_columns'=>$form_columns,'icon'=>WP_CONTENT_URL.'/plugins/search-engine/assets/icons/search_32.png','custom'=>array('form'=>'search_engine_index_form','action_end_view'=>'search_engine_index_run','header'=>'search_engine_index_header')));
+        $admin = new Search_Engine_Admin(array('do'=>'create','item'=>'Index Template','items'=>'Index Templates','table'=>SEARCH_ENGINE_TBL.'templates','columns'=>$columns,'form_columns'=>$form_columns,'icon'=>WP_PLUGIN_URL.'/search-engine/assets/icons/search_32.png','custom'=>array('form'=>'search_engine_index_form','action_end_view'=>'search_engine_index_run','header'=>'search_engine_index_header')));
         $admin->go();
         $template_id = $admin->insert_id;
     }
@@ -357,7 +381,7 @@ function search_engine_wizard_run ()
 }
 function search_engine_index ()
 {
-    require_once "classes/API.class.php";
+    require_once SEARCH_ENGINE_DIR.'/classes/API.class.php';
     if(isset($_GET['do'])&&$_GET['do']=='save'&&!empty($_POST))
     {
         if(!empty($_POST['site_url']))
@@ -380,7 +404,7 @@ function search_engine_index ()
         }
         $_POST['site'] = $site_id;
     }
-    require_once "classes/Admin.class.php";
+    require_once SEARCH_ENGINE_DIR.'/classes/Admin.class.php';
     $columns = array('site'=>array('custom_relate'=>array('table'=>SEARCH_ENGINE_TBL.'sites','what'=>'host','is'=>'site')),'indexed'=>array('label'=>'Date Indexed','type'=>'date'),'updated'=>array('label'=>'Last Modified','type'=>'date'),'id'=>array('label'=>'Template ID'));
     $form_columns = $columns;
     unset($form_columns['id']);
@@ -395,7 +419,7 @@ function search_engine_index ()
     $form_columns[] = 'whitelist_uri_words';
     $form_columns[] = 'htaccess_username';
     $form_columns[] = 'htaccess_password';
-    $admin = new Search_Engine_Admin(array('item'=>'Index Template','items'=>'Index Templates','table'=>SEARCH_ENGINE_TBL.'templates','columns'=>$columns,'form_columns'=>$form_columns,'icon'=>WP_CONTENT_URL.'/plugins/search-engine/assets/icons/search_32.png','custom'=>array('form'=>'search_engine_index_form','action_end_view'=>'search_engine_index_run','header'=>'search_engine_index_header')));
+    $admin = new Search_Engine_Admin(array('item'=>'Index Template','items'=>'Index Templates','table'=>SEARCH_ENGINE_TBL.'templates','columns'=>$columns,'form_columns'=>$form_columns,'icon'=>WP_PLUGIN_URL.'/search-engine/assets/icons/search_32.png','custom'=>array('form'=>'search_engine_index_form','action_end_view'=>'search_engine_index_run','header'=>'search_engine_index_header')));
     $admin->go();
 ?>
 <?php
@@ -567,14 +591,14 @@ function search_engine_index_form ($obj,$create=0)
 }
 function search_engine_groups ()
 {
-    require_once "classes/Admin.class.php";
+    require_once SEARCH_ENGINE_DIR.'/classes/Admin.class.php';
     $columns = array('name','created'=>array('label'=>'Date Created','type'=>'date'),'updated'=>array('label'=>'Last Modified','type'=>'date'));
     $form_columns = $columns;
     $form_columns['created']['updated'] = false;
     $form_columns['created']['display'] = false;
     $form_columns['updated']['update'] = true;
     $form_columns['updated']['display'] = false;
-    $admin = new Search_Engine_Admin(array('item'=>'Group','items'=>'Groups','table'=>SEARCH_ENGINE_TBL.'groups','columns'=>$columns,'form_columns'=>$form_columns,'icon'=>WP_CONTENT_URL.'/plugins/search-engine/assets/icons/search_32.png'));
+    $admin = new Search_Engine_Admin(array('item'=>'Group','items'=>'Groups','table'=>SEARCH_ENGINE_TBL.'groups','columns'=>$columns,'form_columns'=>$form_columns,'icon'=>WP_PLUGIN_URL.'/search-engine/assets/icons/search_32.png'));
     $admin->go();
 }
 function search_engine_groups_form ($obj)
@@ -583,14 +607,14 @@ function search_engine_groups_form ($obj)
 }
 function search_engine_view_index ()
 {
-    require_once "classes/Admin.class.php";
+    require_once SEARCH_ENGINE_DIR.'/classes/Admin.class.php';
     $columns = array('host'=>array('label'=>'Site URL','custom_display'=>'search_engine_view_index_display'),'indexed'=>array('label'=>'Date Indexed','type'=>'date'),'updated'=>array('label'=>'Last Modified','type'=>'date'));
     $form_columns = $columns;
     unset($form_columns['indexed']);
     $form_columns[] = 'scheme';
     $form_columns['updated']['update'] = true;
     $form_columns['updated']['display'] = false;
-    $admin = new Search_Engine_Admin(array('item'=>'Index','items'=>'Index','table'=>SEARCH_ENGINE_TBL.'sites','columns'=>$columns,'form_columns'=>$form_columns,'icon'=>WP_CONTENT_URL.'/plugins/search-engine/assets/icons/search_32.png','custom'=>array('action_end_view'=>'search_engine_view_index_run','view'=>'search_engine_view_index_details'),'edit'=>false,'add'=>false,'view'=>true));
+    $admin = new Search_Engine_Admin(array('item'=>'Index','items'=>'Index','table'=>SEARCH_ENGINE_TBL.'sites','columns'=>$columns,'form_columns'=>$form_columns,'icon'=>WP_PLUGIN_URL.'/search-engine/assets/icons/search_32.png','custom'=>array('action_end_view'=>'search_engine_view_index_run','view'=>'search_engine_view_index_details'),'edit'=>false,'add'=>false,'view'=>true));
     $admin->go();
 }
 function search_engine_view_index_details ($obj)
@@ -609,14 +633,14 @@ function search_engine_view_index_run ($obj,$row)
 }
 function search_engine_logs ()
 {
-    require_once "classes/Admin.class.php";
-    $admin = new Search_Engine_Admin(array('item'=>'Search Log','items'=>'Search Logs','table'=>SEARCH_ENGINE_TBL.'log','columns'=>array('query','time'=>array('type'=>'date','label'=>'Date of Search'),'elapsed'=>array('label'=>'Processing Time'),'results'=>array('label'=>'Total Results Found')),'add'=>false,'edit'=>false,'delete'=>false,'icon'=>WP_CONTENT_URL.'/plugins/search-engine/assets/icons/search_32.png'));
+    require_once SEARCH_ENGINE_DIR.'/classes/Admin.class.php';
+    $admin = new Search_Engine_Admin(array('item'=>'Search Log','items'=>'Search Logs','table'=>SEARCH_ENGINE_TBL.'log','columns'=>array('query','time'=>array('type'=>'date','label'=>'Date of Search'),'elapsed'=>array('label'=>'Processing Time'),'results'=>array('label'=>'Total Results Found')),'add'=>false,'edit'=>false,'delete'=>false,'icon'=>WP_PLUGIN_URL.'/search-engine/assets/icons/search_32.png'));
     $admin->go();
 }
 function search_engine_search_settings ()
 {
     global $wpdb;
-    require_once "classes/Admin.class.php";
+    require_once SEARCH_ENGINE_DIR.'/classes/Admin.class.php';
     $columns = array('name','searched'=>array('label'=>'Last Searched','type'=>'date'),'updated'=>array('label'=>'Last Modified','type'=>'date'));
     $form_columns = $columns;
     unset($form_columns['searched']);
@@ -634,7 +658,7 @@ function search_engine_search_settings ()
     {
         $delete = false;
     }
-    $admin = new Search_Engine_Admin(array('item'=>'Search Setting','items'=>'Search Settings','table'=>SEARCH_ENGINE_TBL.'search','columns'=>$columns,'form_columns'=>$form_columns,'delete'=>$delete,'icon'=>WP_CONTENT_URL.'/plugins/search-engine/assets/icons/search_32.png'));
+    $admin = new Search_Engine_Admin(array('item'=>'Search Setting','items'=>'Search Settings','table'=>SEARCH_ENGINE_TBL.'search','columns'=>$columns,'form_columns'=>$form_columns,'delete'=>$delete,'icon'=>WP_PLUGIN_URL.'/search-engine/assets/icons/search_32.png'));
     $admin->go();
 }
 function search_engine_about ()
@@ -759,7 +783,7 @@ function search_engine_get_posts ( $posts ) {
     add_action( 'loop_start', 'search_engine_loop_start' );
     add_action( 'loop_end', 'search_engine_loop_end' );
 
-    wp_enqueue_style('search-engine',WP_CONTENT_URL.'/plugins/search-engine/assets/style.css');
+    wp_enqueue_style('search-engine',WP_PLUGIN_URL.'/search-engine/assets/style.css');
 
     // We let the user optionally choose a different search template to use
     add_filter('template_redirect','search_engine_template');
@@ -823,7 +847,7 @@ function search_engine_form ()
 function search_engine_content ($atts=false)
 {
     global $search_engine;
-    include_once "classes/API.class.php";
+    include_once SEARCH_ENGINE_DIR.'/classes/API.class.php';
     $api = new Search_Engine_API();
     $site = parse_url(get_bloginfo('wpurl'));
     $site = $api->get_site(array('host'=>$site['host'],'scheme'=>$site['scheme']));
@@ -836,7 +860,7 @@ function search_engine_content ($atts=false)
         $atts = shortcode_atts(array('sites'=>$site_id),$atts);
         $site_ids = explode(',',$atts['sites']);
     }
-    include_once "classes/Search.class.php";
+    include_once SEARCH_ENGINE_DIR.'/classes/Search.class.php';
     $query = '';
     if(!wp_style_is('search-engine')&&isset($_GET['q']))
         $query = stripslashes($_GET['q']);
@@ -852,7 +876,7 @@ function search_engine_content ($atts=false)
     {
         $search_engine['css_output'] =1;
 ?>
-<link rel="stylesheet" type="text/css" href="<?php echo WP_CONTENT_URL.'/plugins/search-engine/assets/style.css'; ?>" />
+<link rel="stylesheet" type="text/css" href="<?php echo WP_PLUGIN_URL.'/search-engine/assets/style.css'; ?>" />
 <?php
     }
 ?>

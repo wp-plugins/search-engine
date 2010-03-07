@@ -875,7 +875,7 @@ jQuery('table.widefat tbody tr:even').addClass('alternate');
         $total_pages = ceil($total_rows / $rows_per_page);
         $request_uri = $this->var_update(array('pg'=>''),array('limit','order','order_dir','search')).'&';
         $begin = ($rows_per_page*$page)-($rows_per_page-1);
-        $end = ($total_pages==$page?$total_rows:($rows_per_page*$page));<?php if($total_rows<1){ echo 0; } else { echo $begin; ?>&#8211;<?php echo $end; } ?>
+        $end = ($total_pages==$page?$total_rows:($rows_per_page*$page));
 ?>
 			<span class="displaying-num">Displaying <?php if($total_rows<1){ echo 0; } else { echo $begin; ?>&#8211;<?php echo $end; } ?> of <?php echo $total_rows; ?></span>
 <?php

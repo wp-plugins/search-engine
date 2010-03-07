@@ -4,7 +4,7 @@ Donate link: http://www.scottkclark.com/
 Tags: search engine, spider, index, search, google
 Requires at least: 2.9.2
 Tested up to: 3.0
-Stable tag: 0.4.0
+Stable tag: 0.4.1
 
 THIS IS A BETA VERSION - Currently in development - A search engine for WordPress that indexes ALL of your site and provides comprehensive search.
 
@@ -27,10 +27,16 @@ What if my site or parts of my site is password protected? Currently, only htacc
 = 0.4.0 =
 * First official release to the public as a plugin
 
+= 0.4.1 =
+* Bug fixes: Inclusion of SQL :-) and fix in Admin.class.php
+
 == Upgrade Notice ==
 
 = 0.4.0 =
 You aren't using the real plugin, upgrade and you enjoy what you originally downloaded this for!
+
+= 0.4.1 =
+You probably don't see this plugin working at all, upgrade and I promise it will work :-)
 
 == Installation ==
 
