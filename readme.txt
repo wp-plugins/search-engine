@@ -65,7 +65,6 @@ These testers are especially helping make this Beta plugin get to 1.0! If you ar
 = Administration =
 * Easy Indexing Wizard - Create Templates and Index Existing / New Sites
 * Index Templates - Reindex Sites via the Wizard or via cronjob.php
-* Search Settings - Setup multiple searches on your site
 * View Search Logs - View queries recently typed, how long it took them to process, and how many results were returned
 * Admin.Class.php - A class for plugins to manage data using the WordPress UI appearance
 
@@ -95,6 +94,7 @@ These testers are especially helping make this Beta plugin get to 1.0! If you ar
 == Roadmap ==
 
 = 0.5.0 =
+* Search Settings - Setup/control multiple searches on your site
 * AND / OR / "Exact Phrase" multi-combination Support
 * Cronjob Groups - Ability to run multiple templates at a time based on Cronjob Group in cronjob.php
 * Integration with wp_cron - Option to enable a template to rerun on it's own - like magic!
