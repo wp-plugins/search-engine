@@ -71,7 +71,6 @@ These testers are especially helping make this Beta plugin get to 1.0! If you ar
 = Administration =
 * Easy Indexing Wizard - Create Templates and Index Existing / New Sites
 * Index Templates - Reindex Sites via the Wizard or via cronjob.php
-* View Search Logs - View queries recently typed, how long it took them to process, and how many results were returned
 * Admin.Class.php - A class for plugins to manage data using the WordPress UI appearance
 
 = Spider =
@@ -92,7 +91,6 @@ These testers are especially helping make this Beta plugin get to 1.0! If you ar
 
 = Search =
 * OR Support
-* Negative Keyword Matching using -word Format
 * Shortcode can be used in WP Pages to display form and search specific site(s) (by site ID) - [search_engine sites="1,4,5"]
 * search_engine_form() to display the Search Engine form anywhere on your site - Note, form points to the root of your site for search like normal WP search
 * search_engine_content() can be placed in a template to call the Search Engine form / results
@@ -102,6 +100,8 @@ These testers are especially helping make this Beta plugin get to 1.0! If you ar
 = 0.5.0 =
 * Search Settings - Setup/control multiple searches on your site
 * AND / OR / "Exact Phrase" multi-combination Support
+* Negative Keyword Matching using -word Format
+* View Search Logs - View queries recently typed, how long it took them to process, and how many results were returned
 * Cronjob Groups - Ability to run multiple templates at a time based on Cronjob Group in cronjob.php
 * Integration with wp_cron - Option to enable a template to rerun on it's own - like magic!
 * View Index Logs - View statistics from indexing like Links Not Found, Links Redirected, etc
