@@ -3,7 +3,7 @@
 Plugin Name: Search Engine
 Plugin URI: http://www.scottkclark.com/wordpress/search-engine/
 Description: THIS IS A BETA VERSION - Currently in development - A search engine for WordPress that indexes ALL of your site and provides comprehensive search.
-Version: 0.4.4
+Version: 0.4.5
 Author: Scott Kingsley Clark
 Author URI: http://www.scottkclark.com/
 
@@ -24,7 +24,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 global $wpdb;
 define('SEARCH_ENGINE_TBL',$wpdb->prefix.'searchengine_');
-define('SEARCH_ENGINE_VERSION','044');
+define('SEARCH_ENGINE_VERSION','045');
 define('SEARCH_ENGINE_URL', WP_PLUGIN_URL . '/search-engine');
 define('SEARCH_ENGINE_DIR', WP_PLUGIN_DIR . '/search-engine');
 
@@ -115,6 +115,7 @@ function search_engine_current_user_can_which ($caps)
 }
 function search_engine_menu ()
 {
+    global $wpdb;
     $has_full_access = current_user_can("search_engine_full_access");
     if(!$has_full_access&&current_user_can("administrator"))
         $has_full_access = true;
@@ -122,9 +123,13 @@ function search_engine_menu ()
     $min_cap = search_engine_current_user_can_which(search_engine_capabilities());
     if(empty($min_cap))
         $min_cap = "search_engine_full_access";
+
+    $templates = @count($wpdb->get_results('SELECT id FROM '.SEARCH_ENGINE_TBL.'templates LIMIT 1'));
+
     add_menu_page('Search Engine', 'Search Engine', $has_full_access ? "read" : $min_cap, 'search-engine', null, WP_PLUGIN_URL.'/search-engine/assets/icons/search_16.png');
     add_submenu_page('search-engine', 'Wizard', 'Wizard', $has_full_access ? "read" : "search_engine_index_templates", 'search-engine', 'search_engine_wizard');
-    add_submenu_page('search-engine', 'Index Templates', 'Index Templates', $has_full_access ? "read" : "search_engine_index", 'search-engine-index', 'search_engine_index');
+    if(0<$templates)
+        add_submenu_page('search-engine', 'Index Templates', 'Index Templates', $has_full_access ? "read" : "search_engine_index", 'search-engine-index', 'search_engine_index');
     /* COMING SOON! :-)
     add_submenu_page('search-engine', 'XML Sitemaps', 'XML Sitemaps', $has_full_access ? "read" : "search_engine_view_indexmaps", 'search-engine-xml-sitemaps', 'search_engine_xml_sitemaps');
     add_submenu_page('search-engine', 'Groups', 'Groups', $has_full_access ? "read" : "search_engine_groups", 'search-engine-groups', 'search_engine_groups');
