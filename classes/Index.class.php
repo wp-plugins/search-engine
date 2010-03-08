@@ -152,7 +152,7 @@ class Search_Engine_Index
     function get_keywords ($content)
     {
         $content = preg_replace("[^A-Za-z_\'-]", " ", $content);
-        $content = str_replace(array(' - ',' _ ',' \' '),' ',' '.$content.' ');
+        $content = str_replace(array('-',' _ ',' \' '),' ',' '.$content.' ');
         $content = str_ireplace($this->common_words,' ',' '.$content.' ');
         $keywords = explode(' ',$content);
         array_walk($keywords,'Search_Engine_Index::remove_insignificant');
@@ -162,7 +162,7 @@ class Search_Engine_Index
     {
         $tags = get_tag_data($html,array('img','a'));
         $parsed = parse_url($url);
-        $additional_content = explode(' ',str_replace('/',' ',$parsed['path']));
+        $additional_content = array();
         if(!empty($tags)) foreach($tags as $tag=>$items)
         {
             if($tag=='img')
@@ -184,6 +184,7 @@ class Search_Engine_Index
                 }
             }
         }
+        $additional_content = array_merge($additional_content,explode(' ',str_replace('/',' ',$parsed['path'])));
         $additional_content = implode(' ',$additional_content);
         $additional_content = $this->get_keywords($additional_content);
         $replace = array('<br />','<br/>','<br>');

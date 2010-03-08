@@ -274,10 +274,8 @@ class Search_Engine_Search
         }
         $excerpt = $this->highlight_terms($excerpt, $terms);
 
-        if (!$start) {
+        if (!$start&&$excerpting)
             $excerpt = "..." . $excerpt;
-            // do not add three dots to the beginning of the post
-        }
 
         if($excerpting)
             $excerpt = $excerpt . "...";

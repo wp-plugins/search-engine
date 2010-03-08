@@ -67,19 +67,18 @@ class Search_Engine_API
         {
             $wpdb->query($wpdb->prepare("UPDATE $this->table_links SET `title`=%s,`description`=%s,`fulltxt`=%s,`lastmod`=%s,`updated`=FROM_UNIXTIME(UNIX_TIMESTAMP()),`size`=%d,`md5_checksum`=%s,`level`=%d WHERE id=$link_id",
                     array($params['title'], $params['description'], $params['fulltxt'], $params['lastmod'], $params['size'], $params['md5_checksum'], $params['level'])));
+            $wpdb->query($wpdb->prepare("DELETE FROM $this->table_index WHERE `link`=%d AND `keyword`=%d AND `site`=%d",array($link_id, $keyword_id, $params['site'])));
             foreach($params['keywords'] as $keyword_id=>$weight)
             {
-                $index_id = @current($wpdb->get_col($wpdb->prepare("SELECT id FROM $this->table_index WHERE `link`=%d AND `keyword`=%d AND `site`=%d",array($link_id, $keyword_id, $params['site']))));
+               /* $index_id = @current($wpdb->get_col($wpdb->prepare("SELECT id FROM $this->table_index WHERE `link`=%d AND `keyword`=%d AND `site`=%d",array($link_id, $keyword_id, $params['site']))));
                 if(is_numeric($index_id))
                 {
-                    $wpdb->query($wpdb->prepare("UPDATE $this->table_index SET `weight`=%d WHERE id=$index_id",
-                            array($weight)));
+                    $wpdb->query($wpdb->prepare("UPDATE $this->table_index SET `weight`=%d WHERE id=$index_id",array($weight)));
                 }
                 else
-                {
-                    $wpdb->query($wpdb->prepare("INSERT INTO $this->table_index (`link`,`keyword`,`weight`,`site`) VALUES ( %d, %d, %d, %d )",
-                            array($link_id, $keyword_id, $weight, $params['site'])));
-                }
+                {*/
+                    $wpdb->query($wpdb->prepare("INSERT INTO $this->table_index (`link`,`keyword`,`weight`,`site`) VALUES ( %d, %d, %d, %d )",array($link_id, $keyword_id, $weight, $params['site'])));
+                //}
             }
             return true;
         }
