@@ -825,17 +825,21 @@ function search_engine_get_posts ( $posts ) {
 }
 function search_engine_loop_start ()
 {
-    if(is_search())
+    global $search_engine;
+    if(is_search()&&!isset($search_engine['started']))
     {
         ob_start();
+        $search_engine['started'] = true;
     }
 }
 function search_engine_loop_end ()
 {
-    if(is_search())
+    global $search_engine;
+    if(is_search()&&!isset($search_engine['ended']))
     {
         ob_end_clean();
         search_engine_content();
+        $search_engine['ended'] = true;
     }
 }
 function search_engine_template()
