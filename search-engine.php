@@ -3,7 +3,7 @@
 Plugin Name: Search Engine
 Plugin URI: http://www.scottkclark.com/wordpress/search-engine/
 Description: THIS IS A BETA VERSION - Currently in development - A search engine for WordPress that indexes ALL of your site and provides comprehensive search.
-Version: 0.4.3
+Version: 0.4.4
 Author: Scott Kingsley Clark
 Author URI: http://www.scottkclark.com/
 
@@ -24,7 +24,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 global $wpdb;
 define('SEARCH_ENGINE_TBL',$wpdb->prefix.'searchengine_');
-define('SEARCH_ENGINE_VERSION','042');
+define('SEARCH_ENGINE_VERSION','044');
 define('SEARCH_ENGINE_URL', WP_PLUGIN_URL . '/search-engine');
 define('SEARCH_ENGINE_DIR', WP_PLUGIN_DIR . '/search-engine');
 

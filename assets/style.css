@@ -8,7 +8,11 @@ div#search_engine_Area {
 	clear: both!important;
 }
 div#search_engine_Area h1 {
+    color:#000!important;
     margin-bottom:15px!important;
+}
+div#search_engine_Area p {
+    color:#000!important;
 }
 div#search_engine_Area input.search_engine_Box {
 	padding: 2px!important;
@@ -16,6 +20,7 @@ div#search_engine_Area input.search_engine_Box {
 	vertical-align: middle!important;
 	font-family: Arial, Helvetica, sans-serif!important;
 	margin: 0!important;
+    color:#000!important;
 }
 div#search_engine_Area input.search_engine_Button {
 	margin: 0 0 0 5px!important;
@@ -29,6 +34,7 @@ div#search_engine_Area input.search_engine_Button {
 	-moz-border-radius: 4px!important;
 	border-radius: 4px!important;
 	border: 1px solid #999!important;
+    color:#000!important;
 	cursor: pointer!important;
 }
 div#search_engine_Area input.search_engine_Button:hover {
@@ -36,6 +42,7 @@ div#search_engine_Area input.search_engine_Button:hover {
 	-webkit-border-radius: 4px!important;
 	-moz-border-radius: 4px!important;
 	border-radius: 4px!important;
+    color:#000!important;
 	border: 1px solid #999!important;
 	cursor: pointer!important;
 }
@@ -45,17 +52,20 @@ div#search_engine_Area div.search_engine_InfoBar {
 	background-color: #F0F7F9!important;
 	border-top: 1px solid #6B90DA!important;
 	clear: both!important;
+    color:#000!important;
 }
 div#search_engine_Area div.search_engine_InfoBar p {
 	margin: 0!important;
 	padding: 0!important;
 	text-align: right!important;
 	font-size: 13px!important;
+    color:#000!important;
 }
 div#search_engine_Area ul.search_engine_results {
 	list-style-type: none!important;
 	margin: 0!important;
 	padding: 0!important;
+    color:#000!important;
 }
 div#search_engine_Area ul.search_engine_results li {
 	list-style-type: none!important;
@@ -77,6 +87,7 @@ div#search_engine_Area div.search_engine_Description {
 	max-width: 42em!important;
 	margin: 0!important;
 	padding: 0!important;
+    color:#000!important;
 }
 div#search_engine_Area cite.search_engine_URL {
 	color: green!important;

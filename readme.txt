@@ -4,7 +4,7 @@ Donate link: http://www.scottkclark.com/
 Tags: search engine, spider, index, search, google, buddypress, full search, wordpress search
 Requires at least: 2.9.2
 Tested up to: 3.0
-Stable tag: 0.4.3
+Stable tag: 0.4.4
 
 THIS IS A BETA VERSION - Currently in development - A search engine for WordPress that indexes ALL of your site and provides comprehensive search.
 
@@ -24,6 +24,10 @@ What if my site or parts of my site is password protected? Currently, only htacc
 
 == Changelog ==
 
+= 0.4.4 =
+* preg_replace fix
+* CSS tweaks
+
 = 0.4.3 =
 * Tweaks to CSS to make it work in other themes
 * Added SEARCH_ENGINE_CUSTOM_CSS check to see if it's defined, if so - don't use the CSS provided by the plugin
@@ -42,6 +46,10 @@ What if my site or parts of my site is password protected? Currently, only htacc
 * First official release to the public as a plugin
 
 == Upgrade Notice ==
+
+= 0.4.4 =
+* preg_replace fix
+* CSS tweaks
 
 = 0.4.3 =
 * Tweaks to CSS to make it work in other themes

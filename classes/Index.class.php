@@ -188,8 +188,8 @@ class Search_Engine_Index
         $additional_content = $this->get_keywords($additional_content);
         $replace = array('<br />','<br/>','<br>');
         $html = str_ireplace($replace,' ',$html);
-        $html = preg_replace( '/<!--.*?-->/ms', '', $html );
-        $html = preg_replace( '/<script.*?</script>/ms', '', $html );
+        $html = preg_replace( '/(<!--.*?-->)/ms', '', $html );
+        $html = preg_replace( '/(<script.*?<\/script>)/ms', '', $html );
         $content = $this->get_keywords(strip_tags($html));
         $content = array_merge($additional_content,$content);
         if(!empty($this->blacklist_words))
