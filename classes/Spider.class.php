@@ -203,6 +203,7 @@ class Search_Engine_Spider
             if($key!==false)
                 unset($this->links_queued[$key]);
             $this->links_excluded[] = $url;
+            $this->message('<strong>URL Excluded</strong>');
             return false;
         }
         $url_found = $this->get_url($url);
@@ -227,10 +228,12 @@ class Search_Engine_Spider
         }
         elseif($url_found!=$url)
         {
+            $parsed = @parse_url($url_found);
+            if(empty($parsed['path'])||!isset($parsed['path']))
+                $url_found .='/';
             $this->message('URL Redirected to: '.$url_found);
             if($this->init)
             {
-                $parsed = @parse_url($url_found);
                 $this->domain_scope = $parsed['host'];
                 $this->current_host = $parsed['host'];
                 $this->init = false;
@@ -240,7 +243,7 @@ class Search_Engine_Spider
             if($key!==false)
                 unset($this->links_queued[$key]);
             $this->links_processed[] = $url;
-            if(!in_array($url_found,$this->links))
+            if(!in_array($url_found,$this->links)&&$parsed['host']==$this->domain_scope)
             {
                 $this->links_queued[] = $url_found;
                 $this->links[] = $url_found;
@@ -251,13 +254,20 @@ class Search_Engine_Spider
         $this->meta = $this->get_meta_data($url);
         if(strpos($this->meta['robots'],'nofollow')===false)
             $this->links_queued = array_unique(array_merge($this->links_queued,$this->get_all_links($url)));
+        else
+        {
+            $this->message('<strong>URL meta nofollow - No links will be crawled from this URL</strong>');
+        }
         if(strpos($this->meta['robots'],'noindex')===false)
         {
             $this->index($url);
             $this->links_spidered[] = $url;
         }
         else
+        {
             $this->links_excluded[] = $url;
+            $this->message('<strong>URL meta noindex - Will not Index</strong>');
+        }
         $key = array_search($url,$this->links_queued);
         if($key!==false)
             unset($this->links_queued[$key]);
@@ -450,26 +460,31 @@ class Search_Engine_Spider
         if($this->robotstxt_rules!==false&&$this->url_exclusion_robotstxt($path)===false)
         {
             $this->exclude_url($url);
+            $this->message('<strong>URL excluded by robots.txt</strong>');
             return false;
         }
         if($this->excluded_uri!==false&&$this->url_exclusion_uri($path)===false)
         {
             $this->exclude_url($url);
+            $this->message('<strong>URL excluded by URI blacklist</strong>');
             return false;
         }
         if($this->excluded_uri_words!==false&&$this->url_exclusion_uri_words($path)===false)
         {
             $this->exclude_url($url);
+            $this->message('<strong>URL excluded by URI blacklist</strong>');
             return false;
         }
         if($this->included_uri!==false&&$this->url_inclusion_uri($path)===false)
         {
             $this->exclude_url($url);
+            $this->message('<strong>URL excluded by not being in URI whitelist</strong>');
             return false;
         }
         if($this->included_uri_words!==false&&$this->url_inclusion_uri_words($path)===false)
         {
             $this->exclude_url($url);
+            $this->message('<strong>URL excluded by not being in URI whitelist</strong>');
             return false;
         }
         return true;
