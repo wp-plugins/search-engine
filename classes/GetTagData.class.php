@@ -1,9 +1,17 @@
 <?php
 function get_tag_data( $data, $tags = false, $filters = false ) {
     $data = preg_replace( '/(<!--.*?-->)/ms', '', $data );
-    $data = preg_replace( '/(<pre.*?<\/pre>)/ms', '', $data );
-    $data = preg_replace( '/(<code.*?<\/code>)/ms', '', $data );
-    $data = preg_replace( '/(<script.*?<\/script>)/ms', '', $data );
+    $data = preg_replace(
+        array('@<!--.*?-->@siu',
+                    '@<pre[^>]*?>.*?</pre>@siu',
+                    '@<code[^>]*?.*?</code>@siu',
+                    '@<style[^>]*?>.*?</style>@siu',
+                    '@<script[^>]*?.*?</script>@siu',
+                    '@<object[^>]*?.*?</object>@siu',
+                    '@<embed[^>]*?.*?</embed>@siu',
+                    '@<applet[^>]*?.*?</applet>@siu',
+                    '@<noscript[^>]*?.*?</noscript>@siu',
+                    '@<noembed[^>]*?.*?</noembed>@siu'),array(' ', ' ', ' ', ' ', ' ', ' ', ' ', ' ', ' '),$data);
 	$data_parser = new GetTagData();
 
 	if ( is_file( $data ) || preg_match( '{^(?:http|ftp)://}', $data ) )

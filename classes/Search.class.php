@@ -47,7 +47,6 @@ class Search_Engine_Search
 
     function search_exact_query($query)
     {
-        $this->search_string = $query;
         $query_string = preg_match_all("/'([^']+)'/", $this->search_string, $matches, PREG_SET_ORDER);
         $i = 0;
         foreach($matches as $match)
@@ -157,6 +156,7 @@ class Search_Engine_Search
     }
     function search_build_query($query_string)
     {
+        $this->search_string = $query_string;/*
         if(preg_match('/"([^"]+)"/', $query_string) || preg_match("/'([^']+)'/", $query_string))
         {
             $this->type = 'exact';
@@ -178,10 +178,10 @@ class Search_Engine_Search
             $this->search_negation_query($query_string);
         }
         else
-        {
+        {*/
             return $this->search_get_results($query_string);
-        }
-        return $this->search_get_results();
+        //}
+        //return $this->search_get_results();
     }
     function search_get_results($query='')
     {
@@ -199,8 +199,15 @@ class Search_Engine_Search
         }
         if(!empty($query))
         {
-            $this->query_string .= ' '.SEARCH_ENGINE_TBL.'keywords.name LIKE %s ';
-            array_push($this->params, '%'.$query.'%');
+            $terms = explode(' ',$query);
+            $this->query_string .= ' (';
+            $sql = array();
+            foreach($terms as $term)
+            {
+                $sql[] .=  SEARCH_ENGINE_TBL.'keywords.name LIKE %s';
+                array_push($this->params, '%'.$term.'%');
+            }
+            $this->query_string .= implode(' OR ',$sql).') ';
         }
         if($this->type != 'or')
         {
@@ -219,5 +226,98 @@ class Search_Engine_Search
         else
             $this->total_results = $total;
         return $this->results;
+    }
+    function search_do_excerpt ($content,$limit=300)
+    {
+        $terms = explode(' ',$this->search_string);
+        $terms = array_filter($terms);
+        $excerpt_length = $limit;
+        $excerpting = false;
+        if($excerpt_length<strlen($content))
+            $excerpting = true;
+        $excerpt = "";
+
+        $start = false;
+        foreach ($terms as $term) {
+            if (function_exists('mb_stripos')) {
+                $pos = ("" == $content) ? false : mb_stripos($content, $term);
+            }
+            else {
+                $pos = mb_strpos($content, $term);
+                if (false === $pos) {
+                    $titlecased = mb_strtoupper(mb_substr($term, 0, 1)) . mb_substr($term, 1);
+                    $pos = mb_strpos($content, $titlecased);
+                    if (false === $pos) {
+                        $pos = mb_strpos($content, mb_strtoupper($term));
+                    }
+                }
+            }
+
+            if (false !== $pos) {
+                if ($pos + strlen($term) < $excerpt_length) {
+                    $excerpt = mb_substr($content, 0, $excerpt_length);
+                    $start = true;
+                    break;
+                }
+                else {
+                    $half = floor($excerpt_length/2);
+                    $pos = $pos - $half;
+                    $excerpt = mb_substr($content, $pos, $excerpt_length);
+                    break;
+                }
+            }
+        }
+
+        if ("" == $excerpt) {
+            $excerpt = mb_substr($content, 0, $excerpt_length);
+            $start = true;
+        }
+        $excerpt = $this->highlight_terms($excerpt, $terms);
+
+        if (!$start) {
+            $excerpt = "..." . $excerpt;
+            // do not add three dots to the beginning of the post
+        }
+
+        if($excerpting)
+            $excerpt = $excerpt . "...";
+
+        return $excerpt;
+    }
+    function highlight_terms ($excerpt, $terms)
+    {
+        $start_emp = "<strong>";
+        $end_emp = "</strong>";
+
+        $start_emp_token = "*[/";
+        $end_emp_token = "\]*";
+        mb_internal_encoding("UTF-8");
+
+        foreach ($terms as $term)
+        {
+            $pos = 0;
+            $low_term = mb_strtolower($term);
+            $low_excerpt = mb_strtolower($excerpt);
+            while ($pos !== false)
+            {
+                $pos = mb_strpos($low_excerpt, $low_term, $pos);
+                if ($pos !== false)
+                {
+                    $excerpt = mb_substr($excerpt, 0, $pos)
+                             . $start_emp_token
+                             . mb_substr($excerpt, $pos, mb_strlen($term))
+                             . $end_emp_token
+                             . mb_substr($excerpt, $pos + mb_strlen($term));
+                    $low_excerpt = mb_strtolower($excerpt);
+                    $pos = $pos + mb_strlen($start_emp_token) + mb_strlen($end_emp_token);
+                }
+            }
+        }
+
+        $excerpt = str_replace($start_emp_token, $start_emp, $excerpt);
+        $excerpt = str_replace($end_emp_token, $end_emp, $excerpt);
+        $excerpt = str_replace($end_emp . $start_emp, "", $excerpt);
+
+        return $excerpt;
     }
 }

@@ -117,6 +117,7 @@ div#search_engine_Area div.search_engine_Pagination a.search_engine_PrevLink {
 	padding: 0!important;
     font-weight: bold!important;
     margin: 0!important;
+	color: #000!important;
 }
 div#search_engine_Area div.search_engine_Pagination a.search_engine_PrevLink {
 	margin-right: 20px!important;
@@ -126,12 +127,15 @@ div#search_engine_Area div.search_engine_Pagination a.search_engine_NextLink {
 }
 div#search_engine_Area p.search_engine_normal {
     margin-bottom:10px!important;
+	color: #000!important;
 }
 div#search_engine_Area ul.search_engine_real {
     margin-left:30px!important;
     list-style:disc!important;
+	color: #000!important;
 }
 div#search_engine_Area ul.search_engine_real li {
     margin-left:10px!important;
     list-style:disc!important;
+	color: #000!important;
 }

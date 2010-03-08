@@ -3,7 +3,7 @@
 Plugin Name: Search Engine
 Plugin URI: http://www.scottkclark.com/wordpress/search-engine/
 Description: THIS IS A BETA VERSION - Currently in development - A search engine for WordPress that indexes ALL of your site and provides comprehensive search.
-Version: 0.4.5
+Version: 0.4.6
 Author: Scott Kingsley Clark
 Author URI: http://www.scottkclark.com/
 
@@ -24,7 +24,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 global $wpdb;
 define('SEARCH_ENGINE_TBL',$wpdb->prefix.'searchengine_');
-define('SEARCH_ENGINE_VERSION','045');
+define('SEARCH_ENGINE_VERSION','046');
 define('SEARCH_ENGINE_URL', WP_PLUGIN_URL . '/search-engine');
 define('SEARCH_ENGINE_DIR', WP_PLUGIN_DIR . '/search-engine');
 
@@ -944,24 +944,11 @@ function search_engine_content ($atts=false)
         {
             if(empty($result->description))
                 $result->description = $result->fulltxt;
-            $text = $result->description;
-            $text = apply_filters('the_content', $text);
-            $text = str_replace(']]>', ']]&gt;', $text);
-            $text = strip_tags($text);
-            $excerpt_length = apply_filters('excerpt_length', 55);
-            $excerpt_more = apply_filters('excerpt_more', ' ' . '...');
-            $words = explode(' ', $text, $excerpt_length + 1);
-            if (count($words) > $excerpt_length) {
-                array_pop($words);
-                $text = implode(' ', $words);
-                $text = $text . $excerpt_more;
-            }
-            $result->description = $text;
 ?>
     <li>
-        <h3 class="search_engine_Title"><a href="<?php echo $result->url; ?>"><?php echo $result->title; ?></a></h3>
-        <div class="search_engine_Description"><?php echo $result->description; ?></div>
-        <cite class="search_engine_URL"><?php echo $result->url; ?></cite>
+        <h3 class="search_engine_Title"><a href="<?php echo $result->url; ?>"><?php echo $search->search_do_excerpt($result->title,68); ?></a></h3>
+        <div class="search_engine_Description"><?php echo $search->search_do_excerpt($result->description); ?></div>
+        <cite class="search_engine_URL"><?php echo $search->search_do_excerpt($result->url); ?></cite>
     </li>
 <?php
         }
