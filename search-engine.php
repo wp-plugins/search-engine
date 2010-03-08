@@ -3,7 +3,7 @@
 Plugin Name: Search Engine
 Plugin URI: http://www.scottkclark.com/wordpress/search-engine/
 Description: THIS IS A BETA VERSION - Currently in development - A search engine for WordPress that indexes ALL of your site and provides comprehensive search.
-Version: 0.4.6
+Version: 0.4.6.1
 Author: Scott Kingsley Clark
 Author URI: http://www.scottkclark.com/
 
@@ -24,7 +24,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 global $wpdb;
 define('SEARCH_ENGINE_TBL',$wpdb->prefix.'searchengine_');
-define('SEARCH_ENGINE_VERSION','046');
+define('SEARCH_ENGINE_VERSION','0461');
 define('SEARCH_ENGINE_URL', WP_PLUGIN_URL . '/search-engine');
 define('SEARCH_ENGINE_DIR', WP_PLUGIN_DIR . '/search-engine');
 
@@ -825,12 +825,18 @@ function search_engine_get_posts ( $posts ) {
 }
 function search_engine_loop_start ()
 {
-    ob_start();
+    if(is_search())
+    {
+        ob_start();
+    }
 }
 function search_engine_loop_end ()
 {
-    ob_end_clean();
-    search_engine_content();
+    if(is_search())
+    {
+        ob_end_clean();
+        search_engine_content();
+    }
 }
 function search_engine_template()
 {
@@ -898,14 +904,6 @@ function search_engine_content ($atts=false)
     }
 ?>
 <div id="search_engine_Area">
-<?php
-    if(wp_style_is('search-engine'))
-    {
-?>
-    <h1>Search</h1>
-<?php
-    }
-?>
 <form action="<?php echo $_SERVER['REQUEST_URI']; ?>" method="get">
     <input name="<?php echo (!wp_style_is('search-engine')?'q':'s'); ?>" type="text" size="41" class="search_engine_Box" value="<?php echo htmlentities($query); ?>" />
     <input name="submit" type="submit" value="Search" class="search_engine_Button" />

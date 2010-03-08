@@ -4,7 +4,7 @@ Donate link: http://www.scottkclark.com/
 Tags: search engine, spider, index, search, google, buddypress, full search, wordpress search
 Requires at least: 2.9
 Tested up to: 3.0
-Stable tag: 0.4.6
+Stable tag: 0.4.6.1
 
 THIS IS A BETA VERSION - Currently in development - A search engine for WordPress that indexes ALL of your site and provides comprehensive search.
 

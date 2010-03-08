@@ -102,6 +102,10 @@ div#search_engine_Area div.search_engine_Pagination {
 	width:100%!important;
 	border-top: 1px solid #ccc!important;
 	text-align: center!important;
+	color: #000!important;
+}
+div#search_engine_Area div.search_engine_Pagination span.current {
+	color: #000!important;
 }
 div#search_engine_Area div.search_engine_Pagination a {
 	color: #000!important;
