@@ -98,23 +98,23 @@ class Search_Engine_Index
         {
             $score = $count * 5;
             if($parsed==0)
-                $score += 50;
+                $score += 10;
             else
             {
                 if($parsed<5)
                 {
                     $parse_calc = $parsed * (4-$parsed);
-                    $score += 20 - $parse_calc;
+                    $score += $parse_calc - 5;
                 }
             }
             if(isset($meta_url[$keyword]))
-                $score += $meta_url[$keyword] * 10;
+                $score += $meta_url[$keyword] * 40;
             if(isset($meta_title[$keyword]))
-                $score += $meta_title[$keyword] * 9;
+                $score += $meta_title[$keyword] * 30;
             if(isset($meta_h1[$keyword]))
-                $score += $meta_h1[$keyword] * 8;
+                $score += $meta_h1[$keyword] * 30;
             if(isset($meta_h2[$keyword]))
-                $score += $meta_h2[$keyword] * 6;
+                $score += $meta_h2[$keyword] * 20;
             if(isset($meta_description[$keyword]))
                 $score += $meta_description[$keyword];
             if(isset($meta_keywords[$keyword]))
