@@ -190,11 +190,6 @@ class Search_Engine_Spider
         $this->current_url = $url;
         $parsed = @parse_url($url);
         $this->current_parsed = $parsed;
-        if($this->domain_scope===false)
-        {
-            $this->domain_scope = $parsed['host'];
-            $this->current_host = $parsed['host'];
-        }
         if($this->robotstxt_check===false)
             $this->get_robotstxt($url);
         if($this->url_exclusion($parsed['path'],$url)===false)
@@ -232,12 +227,6 @@ class Search_Engine_Spider
             if(empty($parsed['path'])||!isset($parsed['path']))
                 $url_found .='/';
             $this->message('URL Redirected to: '.$url_found);
-            if($this->init)
-            {
-                $this->domain_scope = $parsed['host'];
-                $this->current_host = $parsed['host'];
-                $this->init = false;
-            }
             $this->links_redirected[] = $url;
             $key = array_search($url,$this->links_queued);
             if($key!==false)
@@ -253,20 +242,26 @@ class Search_Engine_Spider
         }
         $this->meta = $this->get_meta_data($url);
         if(strpos($this->meta['robots'],'nofollow')===false)
-            $this->links_queued = array_unique(array_merge($this->links_queued,$this->get_all_links($url)));
+        {
+            $this->message('Getting all links from page..');
+            $links_found = $this->get_all_links($url);
+            $this->message('Links Found: '.count($links_found));
+            $this->links_queued = array_unique(array_merge($this->links_queued,$links_found));
+        }
         else
         {
             $this->message('<strong>URL meta nofollow - No links will be crawled from this URL</strong>');
         }
         if(strpos($this->meta['robots'],'noindex')===false)
         {
+            $this->message('Indexing page..');
             $this->index($url);
             $this->links_spidered[] = $url;
         }
         else
         {
-            $this->links_excluded[] = $url;
             $this->message('<strong>URL meta noindex - Will not Index</strong>');
+            $this->links_excluded[] = $url;
         }
         $key = array_search($url,$this->links_queued);
         if($key!==false)
@@ -656,41 +651,31 @@ class Search_Engine_Spider
     function get_all_links ($data)
     {
         $links = get_tag_data($this->current_data);
+        $debug = false;
         $ret = array();
         if(!empty($links)) foreach($links as $tag=>$items)
         {
             foreach($items as $attributes)
             {
                 $link = false;
-                if(($tag=='a'||$tag=='area')&&isset($attributes['href'])&&strpos($attributes['href'],'#')!==0&&strpos($attributes['href'],'javascript:')!==0)
+                if(($tag=='a'||$tag=='area')&&isset($attributes['href'])&&strpos($attributes['href'],'#')!==0&&strpos($attributes['href'],'javascript:')!==0&&strpos($attributes['href'],'mailto:')!==0)
                     $link = $attributes['href'];
                 if(($tag=='frame'||$tag=='iframe')&&isset($attributes['src']))
                     $link = $attributes['src'];
+                                if($debug)var_dump($link);
                 if($link!==false)
                 {
-                    if($this->domain_scope===false)
+                    $check = @parse_url($link);
+                    if($check!==false&&isset($check['host']))
                     {
-                        if(!in_array($link,$this->links))
-                            $ret[] = $link;
-                    }
-                    else
-                    {
-                        $check = @parse_url($link);
-                        if($check!==false&&isset($check['host']))
-                        {
-                            $poscheck = str_replace($domain_scope,'',$check['host']);
-                            if(strpos($check['host'],$this->domain_scope)===(strlen($check['host'])-strlen($this->domain_scope)))
-                            {
-                                if(!in_array($link,$this->links))
-                                    $ret[] = $link;
-                            }
-                        }
-                        else
-                        {
+                        $poscheck = str_replace($this->domain_scope,'',$check['host']);
+                        if(strpos($check['host'],$this->domain_scope)===(strlen($check['host'])-strlen($this->domain_scope)))
                             if(!in_array($link,$this->links))
                                 $ret[] = $link;
-                        }
                     }
+                    else
+                        if(!in_array($link,$this->links))
+                            $ret[] = $link;
                 }
             }
         }
