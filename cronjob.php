@@ -27,7 +27,27 @@ elseif(isset($_GET['site_id'])&&0<$_GET['site_id'])
 }
 if($spider->site_id!==false)
 {
-    $spider->spider();
+    if($spider->template_id!==false)
+    {
+        $continue = $spider->api->get_queue(array('site'=>$spider->site_id,'template'=>$spider->template_id));
+        if($continue!==false)
+        {
+            $spider_vars = json_decode($continue['queue']);
+            foreach($spider_vars as $var_name=>$var_value)
+            {
+                $spider->$var_name = $var_value;
+            }
+            $spider->munch($spider->links_current,($spider->current_depth-1));
+        }
+        else
+        {
+            $spider->spider();
+        }
+    }
+    else
+    {
+        $spider->spider();
+    }
 }
 else
 {

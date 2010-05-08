@@ -9,7 +9,7 @@ if(!is_object($wpdb))
 
 class Search_Engine_API
 {
-    var $tables = array('index','keywords','links','log','sites','groups','templates');
+    var $tables = array('index','keywords','links','log','sites','groups','templates','queue');
     
     function __construct ()
     {
@@ -116,6 +116,57 @@ class Search_Engine_API
         {
             $wpdb->query("DELETE FROM $this->table_links WHERE id=$link_id");
             $wpdb->query("DELETE FROM $this->table_index WHERE link=$link_id");
+            return true;
+        }
+        return false;
+    }
+    function get_queue ($params)
+    {
+        if(false===$this->validate($params,array('site','template')))
+        {
+            return false;
+        }
+        global $wpdb;
+        $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM $this->table_queue WHERE `site`=%d AND `template`=%d",array($params['site'],$params['template'])),ARRAY_A);
+        if(!empty($row))
+        {
+            return $row;
+        }
+        else
+            return false;
+    }
+    function update_queue ($params)
+    {
+        if(false===$this->validate($params,array('site','template','queue')))
+        {
+            return false;
+        }
+        global $wpdb;
+        $queue_id = @current($wpdb->get_col($wpdb->prepare("SELECT id FROM $this->table_queue WHERE `site`=%d AND `template`=%d",array($params['site'], $params['template']))));
+        if(is_numeric($queue_id))
+        {
+            $wpdb->query($wpdb->prepare("UPDATE $this->table_queue SET `queue`=%s,`updated`=FROM_UNIXTIME(UNIX_TIMESTAMP()) WHERE id=$queue_id",array($params['queue'])));
+            return true;
+        }
+        else
+        {
+            $wpdb->query($wpdb->prepare("INSERT INTO $this->table_queue (`site`,`template`,`added`,`updated`,`queue`) VALUES ( %d, %d, FROM_UNIXTIME(UNIX_TIMESTAMP()), FROM_UNIXTIME(UNIX_TIMESTAMP()), %s )",
+                    array($params['site'], $params['template'], $params['queue'])));
+            $link_id = $wpdb->insert_id;
+            return $link_id;
+        }
+    }
+    function delete_queue ($params)
+    {
+        if(false===$this->validate($params,array('site','template')))
+        {
+            return false;
+        }
+        global $wpdb;
+        $queue_id = @current($wpdb->get_col($wpdb->prepare("SELECT id FROM $this->table_queue WHERE `site`=%d AND `template`=%d",array($params['site'], $params['template']))));
+        if(is_numeric($queue_id))
+        {
+            $wpdb->query("DELETE FROM $this->table_queue WHERE id=$queue_id");
             return true;
         }
         return false;

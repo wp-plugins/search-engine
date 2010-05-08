@@ -3,7 +3,7 @@ require_once "GetTagData.class.php";
 require_once "Index.class.php";
 require_once "API.class.php";
 
-set_time_limit(0);
+set_time_limit(1200);
 ini_set('memory_limit','64M');
 ignore_user_abort(true);
 
@@ -34,6 +34,7 @@ class Search_Engine_Spider
     var $links_notfound = array();
     var $links_servererror = array();
     var $links_other = array();
+    var $links_current = array();
 
     var $current_depth = -1;
     var $max_depth = false;
@@ -61,6 +62,7 @@ class Search_Engine_Spider
 
     var $index = false;
     var $api = false;
+    var $queue_counter = 0;
 
     function set_site ($site_id)
     {
@@ -144,7 +146,19 @@ class Search_Engine_Spider
         $this->links[] = $url;
         $this->links_processed[] = $url;
         $check = $this->crunch($url);
-        if($check&&!empty($this->links_queued))
+        $this->munch($this->links_queued,$depth);
+    }
+    function munch ($links,$depth)
+    {
+        if($this->api===false)
+            $this->api = new Search_Engine_API();
+        if($this->index===false)
+        {
+            $this->index = new Search_Engine_Index();
+            if(false!==$this->excluded_words)
+                $this->index->blacklist_words = $this->excluded_words;
+        }
+        if(!empty($links))
         {
             if($this->max_depth!==false&&($depth+1)==$this->max_depth)
             {
@@ -156,27 +170,37 @@ class Search_Engine_Spider
                 $this->message('<strong>Spidering Completed - Max Depth Reached</strong>');
                 return false;
             }
-            $this->brunch($this->links_queued,$depth+1);
+            $this->brunch($links,$depth+1);
         }
         if(false!==$this->site_id)
             $this->api->bump_site(array('id'=>$this->site_id));
         if(false!==$this->template_id)
             $this->api->bump_template(array('id'=>$this->template_id));
+        $api->delete_queue(array('site'=>$this->site_id,'template'=>$this->template_id));
         $this->message('<strong>Final Report</strong><ul><li><strong>Links Found:</strong> '.count($this->links).'</li><li><strong>Links Processed:</strong> '.count($this->links_processed).'</li><li><strong>Links Spidered:</strong> '.count($this->links_spidered).'</li><li><strong>Links Excluded:</strong> '.count($this->links_excluded).'</li><li><strong>Links Redirected:</strong> '.count($this->links_redirected).'</li><li><strong>Links Not Found:</strong> '.count($this->links_notfound).'</li><li><strong>Links With Server Errors:</strong> '.count($this->links_servererror).'</li><li><strong>Links Non-HTML Content Types:</strong> '.count($this->links_other).'</li></ul>');
         $this->message('<strong>Spidering Completed</strong>');
     }
     function brunch ($urls,$depth)
     {
-        $links = $urls;
-        if(empty($links))
+        $this->queue_counter = 0;
+        $api = $this->api;
+        $this->api = false;
+        $index = $this->index;
+        $this->index = false;
+        $this->links_current = $urls;
+        $api->update_queue(array('site'=>$this->site_id,'template'=>$this->template_id,'queue'=>json_encode((array)$this)));
+        $this->api = $api;
+        $this->index = $index;
+        if(empty($urls))
             return false;
         $this->message('<strong>Status Update</strong><ul><li><strong>Links To Be Crunched:</strong> '.count($urls).'</li><li><strong>Links Queued:</strong> '.count($this->links_queued).'</li><li><strong>Links Processed:</strong> '.count($this->links_processed).'</li><li><strong>Links Spidered:</strong> '.count($this->links_spidered).'</li><li><strong>Links Excluded:</strong> '.count($this->links_excluded).'</li><li><strong>Links Redirected:</strong> '.count($this->links_redirected).'</li><li><strong>Links Not Found:</strong> '.count($this->links_notfound).'</li><li><strong>Links With Server Errors:</strong> '.count($this->links_servererror).'</li><li><strong>Links Non-HTML Content Types:</strong> '.count($this->links_other).'</li></ul>');
-        foreach($links as $link)
+        foreach($urls as $link)
         {
             $this->links_processed[] = $link;
             $this->current_depth = $depth;
             $this->crunch($link);
         }
+        $this->queue_counter = 0;
         if(!empty($this->links_queued))
         {
             if($this->max_depth!==false&&($depth+1)==$this->max_depth)
@@ -186,6 +210,19 @@ class Search_Engine_Spider
     }
     function crunch ($url)
     {
+        $this->queue_counter++;
+        if($this->queue_counter==15)
+        {
+            $api = $this->api;
+            $this->api = false;
+            $index = $this->index;
+            $this->index = false;
+            $this->links_current = array_diff($this->links_current,$this->links_processed,$this->links_queued);
+            $api->update_queue(array('site'=>$this->site_id,'template'=>$this->template_id,'queue'=>json_encode((array)$this)));
+            $this->api = $api;
+            $this->index = $index;
+            $this->queue_counter = 0;
+        }
         $this->message('Crunching URL: '.$url);
         $this->current_url = $url;
         $parsed = @parse_url($url);
