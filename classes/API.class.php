@@ -10,7 +10,7 @@ if(!is_object($wpdb))
 class Search_Engine_API
 {
     var $tables = array('index','keywords','links','log','sites','groups','templates','queue');
-    
+
     function __construct ()
     {
         global $wpdb;
@@ -70,15 +70,7 @@ class Search_Engine_API
             $wpdb->query($wpdb->prepare("DELETE FROM $this->table_index WHERE `link`=%d AND `keyword`=%d AND `site`=%d",array($link_id, $keyword_id, $params['site'])));
             foreach($params['keywords'] as $keyword_id=>$weight)
             {
-               /* $index_id = @current($wpdb->get_col($wpdb->prepare("SELECT id FROM $this->table_index WHERE `link`=%d AND `keyword`=%d AND `site`=%d",array($link_id, $keyword_id, $params['site']))));
-                if(is_numeric($index_id))
-                {
-                    $wpdb->query($wpdb->prepare("UPDATE $this->table_index SET `weight`=%d WHERE id=$index_id",array($weight)));
-                }
-                else
-                {*/
-                    $wpdb->query($wpdb->prepare("INSERT INTO $this->table_index (`link`,`keyword`,`weight`,`site`) VALUES ( %d, %d, %d, %d )",array($link_id, $keyword_id, $weight, $params['site'])));
-                //}
+                $wpdb->query($wpdb->prepare("INSERT INTO $this->table_index (`link`,`keyword`,`weight`,`site`) VALUES ( %d, %d, %d, %d )",array($link_id, $keyword_id, $weight, $params['site'])));
             }
             return true;
         }

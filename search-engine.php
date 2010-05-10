@@ -3,7 +3,7 @@
 Plugin Name: Search Engine
 Plugin URI: http://www.scottkclark.com/wordpress/search-engine/
 Description: THIS IS A BETA VERSION - Currently in development - A search engine for WordPress that indexes ALL of your site and provides comprehensive search.
-Version: 0.4.7
+Version: 0.5.0
 Author: Scott Kingsley Clark
 Author URI: http://www.scottkclark.com/
 
@@ -24,7 +24,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 global $wpdb;
 define('SEARCH_ENGINE_TBL',$wpdb->prefix.'searchengine_');
-define('SEARCH_ENGINE_VERSION','047');
+define('SEARCH_ENGINE_VERSION','050');
 define('SEARCH_ENGINE_URL', WP_PLUGIN_URL . '/search-engine');
 define('SEARCH_ENGINE_DIR', WP_PLUGIN_DIR . '/search-engine');
 
@@ -51,6 +51,10 @@ function search_engine_init ()
     }
     elseif($version!=SEARCH_ENGINE_VERSION)
     {
+        if($version<50)
+        {
+            $wpdb->query("CREATE TABLE `".SEARCH_ENGINE_TBL."queue` (`id` int(10) NOT NULL AUTO_INCREMENT, `site` int(10) NOT NULL, `template` int(10) NOT NULL, `added` datetime NOT NULL, `updated` datetime NOT NULL, `queue` longtext COLLATE utf8_unicode_ci NOT NULL, PRIMARY KEY (`id`))");
+        }
         delete_option('search_engine_version');
         add_option('search_engine_version',SEARCH_ENGINE_VERSION);
     }
@@ -910,7 +914,8 @@ function search_engine_content ($atts=false)
 <div id="search_engine_Area">
 <form action="<?php echo $_SERVER['REQUEST_URI']; ?>" method="get">
     <input name="<?php echo (!wp_style_is('search-engine')?'q':'s'); ?>" type="text" size="41" class="search_engine_Box" value="<?php echo htmlentities($query); ?>" />
-    <input name="submit" type="submit" value="Search" class="search_engine_Button" />
+    <input name="submit" type="submit" value="Search" class="search_engine_Button" /><?php if(defined('SEARCH_ENGINE_ADVANCED_URL')){ ?><br />
+    <a href="<?php echo SEARCH_ENGINE_ADVANCED_URL; ?>" class="search_engine_Advanced">Go to Advanced Search</a><?php } ?>
 </form>
 <?php
     if(0<strlen($query))

@@ -32,7 +32,7 @@ if($spider->site_id!==false)
         $continue = $spider->api->get_queue(array('site'=>$spider->site_id,'template'=>$spider->template_id));
         if($continue!==false)
         {
-            $spider_vars = json_decode($continue['queue']);
+            $spider_vars = json_decode($continue['queue'],true);
             foreach($spider_vars as $var_name=>$var_value)
             {
                 $spider->$var_name = $var_value;

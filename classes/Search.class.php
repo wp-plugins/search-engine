@@ -122,7 +122,8 @@ class Search_Engine_Search
             $i++;
         }
 
-        $this->query_string = $sql.') AND '.$this->site_string;
+		$this->query_string = $sql.') AND '.$this->site_string;
+		//DB Edit
         //$this->search_get_results();
     }
     function search_negation_query($query)
@@ -197,6 +198,9 @@ class Search_Engine_Search
             // Custom offset
             $limit = 'LIMIT ' . $this->results_per_page;
         }
+        else{
+        	//empty
+        }
         if(!empty($query))
         {
             $terms = explode(' ',$query);
@@ -209,6 +213,9 @@ class Search_Engine_Search
             }
             $this->query_string .= implode(' OR ',$sql).') ';
         }
+        else{
+        	//empty
+        }
         if($this->type != 'or')
         {
             $this->query_string .= ' AND
@@ -217,9 +224,17 @@ class Search_Engine_Search
                                         '.SEARCH_ENGINE_TBL.'index.link = '.SEARCH_ENGINE_TBL.'links.id';
 
         }
+        else{
+        	//empty
+        }
 
+		//ALWAYS THE STRING - EVERYTHING BEFORE IRRELEVANT
         $this->query_string .= ' GROUP BY '.SEARCH_ENGINE_TBL.'links.url ORDER BY '.SEARCH_ENGINE_TBL.'index.weight DESC '.$limit;
+        //DB EDIT
+        //with "about" all weights are 55
         $this->results = $wpdb->get_results($wpdb->prepare($this->query_string, $this->params));
+//        print_r($this->results);
+//        exit;
         $total = @current($wpdb->get_col('SELECT FOUND_ROWS()'));
         if(is_array($total))
             $this->total_results = $total['FOUND_ROWS()'];

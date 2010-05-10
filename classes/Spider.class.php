@@ -66,7 +66,7 @@ class Search_Engine_Spider
 
     function set_site ($site_id)
     {
-        if($this->api===false)
+        if(!isset($this->api)||$this->api===false||!is_object($this->api))
             $this->api = new Search_Engine_API();
         $site = $this->api->get_site(array('id'=>$site_id));
         $this->url = $site['scheme'].'://'.$site['host'].'/';
@@ -77,7 +77,7 @@ class Search_Engine_Spider
     }
     function set_template ($template_id)
     {
-        if($this->api===false)
+        if(!isset($this->api)||$this->api===false||!is_object($this->api))
             $this->api = new Search_Engine_API();
         $template = $this->api->get_template(array('id'=>$template_id));
         $site = $this->api->get_site(array('id'=>$template['site']));
@@ -114,7 +114,7 @@ class Search_Engine_Spider
             $url = $this->url;
         }
         $url = (string) $url;
-        if($this->api===false)
+        if(!isset($this->api)||$this->api===false||!is_object($this->api))
             $this->api = new Search_Engine_API();
         if($this->domain_scope===false)
         {
@@ -148,17 +148,17 @@ class Search_Engine_Spider
         $check = $this->crunch($url);
         $this->munch($this->links_queued,$depth);
     }
-    function munch ($links,$depth)
+    function munch ($urls,$depth)
     {
-        if($this->api===false)
+        if(!isset($this->api)||$this->api===false||!is_object($this->api))
             $this->api = new Search_Engine_API();
-        if($this->index===false)
+        if(!isset($this->index)||$this->index===false||!is_object($this->index))
         {
             $this->index = new Search_Engine_Index();
             if(false!==$this->excluded_words)
                 $this->index->blacklist_words = $this->excluded_words;
         }
-        if(!empty($links))
+        if(!empty($urls))
         {
             if($this->max_depth!==false&&($depth+1)==$this->max_depth)
             {
@@ -170,13 +170,13 @@ class Search_Engine_Spider
                 $this->message('<strong>Spidering Completed - Max Depth Reached</strong>');
                 return false;
             }
-            $this->brunch($links,$depth+1);
+            $this->brunch($urls,$depth+1);
         }
         if(false!==$this->site_id)
             $this->api->bump_site(array('id'=>$this->site_id));
         if(false!==$this->template_id)
             $this->api->bump_template(array('id'=>$this->template_id));
-        $api->delete_queue(array('site'=>$this->site_id,'template'=>$this->template_id));
+        $this->api->delete_queue(array('site'=>$this->site_id,'template'=>$this->template_id));
         $this->message('<strong>Final Report</strong><ul><li><strong>Links Found:</strong> '.count($this->links).'</li><li><strong>Links Processed:</strong> '.count($this->links_processed).'</li><li><strong>Links Spidered:</strong> '.count($this->links_spidered).'</li><li><strong>Links Excluded:</strong> '.count($this->links_excluded).'</li><li><strong>Links Redirected:</strong> '.count($this->links_redirected).'</li><li><strong>Links Not Found:</strong> '.count($this->links_notfound).'</li><li><strong>Links With Server Errors:</strong> '.count($this->links_servererror).'</li><li><strong>Links Non-HTML Content Types:</strong> '.count($this->links_other).'</li></ul>');
         $this->message('<strong>Spidering Completed</strong>');
     }
@@ -217,7 +217,7 @@ class Search_Engine_Spider
             $this->api = false;
             $index = $this->index;
             $this->index = false;
-            $this->links_current = array_diff($this->links_current,$this->links_processed,$this->links_queued);
+            $this->links_current = array_diff($this->links_current,$this->links_processed);
             $api->update_queue(array('site'=>$this->site_id,'template'=>$this->template_id,'queue'=>json_encode((array)$this)));
             $this->api = $api;
             $this->index = $index;
@@ -307,13 +307,13 @@ class Search_Engine_Spider
     }
     function index ($url)
     {
-        if($this->index===false)
+        if(!isset($this->index)||$this->index===false||!is_object($this->index))
         {
             $this->index = new Search_Engine_Index();
             if(false!==$this->excluded_words)
                 $this->index->blacklist_words = $this->excluded_words;
         }
-        if($this->api===false)
+        if(!isset($this->api)||$this->api===false||!is_object($this->api))
             $this->api = new Search_Engine_API();
         $this->index->get_content($this->current_data,$url);
         $this->index->get_keyword_counts();
