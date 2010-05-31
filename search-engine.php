@@ -710,7 +710,7 @@ function search_engine_about ()
             <th scope="row">Plugin Contributors</th>
             <td>
                 <ul>
-                    <li><a href="http://www.flickr.com/people/piratedrock/">Derek Beaton</a> - PHP Development for Search.class.php on AND / OR / "Exact Phrase" searching</li>
+                    <li><a href="http://utdallas.edu/~derekbeaton/">Derek Beaton</a> - PHP Development for Search.class.php on AND / OR / "Exact Phrase" searching</li>
                     <li><a href="http://studioslice.com/">Greg Dean</a> - Initial PHP Development help for Search.class.php</li>
                     <li><a href="http://gaarai.com/">Chris Jean</a> from <a href="http://ithemes.com/">iThemes</a> - PHP Development for Displaying Results on WP Search Pages</li>
                     <li><a href="http://randyjensenonline.com/">Randy Jansen</a> - HTML / CSS Development for Wizard UI and Search Results Template</li>
