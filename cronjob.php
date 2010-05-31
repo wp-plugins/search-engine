@@ -3,7 +3,7 @@ global $wpdb;
 if(!is_object($wpdb))
 {
     ob_start();
-    require_once(realpath('../../../wp-load.php'));
+    require_once('../../../wp-load.php');
     ob_end_clean();
 }
 $check = get_option('search_engine_token');

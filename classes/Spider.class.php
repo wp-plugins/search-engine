@@ -660,7 +660,7 @@ class Search_Engine_Spider
                         $exp = array_reverse($exp);
                         $check['path'] = implode('/',$exp).'/'.str_replace('../','',$check['path']);
                     }
-                    if($this->url_exclusion($check['path'],$link)!==false)
+                    if($this->url_exclusion($check['path'],$link)!==false||$this->url_exclusion($check['path'].'?'.$check['query'],$link)!==false)
                     {
                         if($this->current_host!==false&&$this->current_host!=$check['host'])
                         {

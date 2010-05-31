@@ -32,7 +32,6 @@ function search_engine_init ()
 {
     global $current_user,$wpdb;
     $capabilities = search_engine_capabilities();
-
     // check version
     $version = get_option('search_engine_version');
     if(empty($version))
@@ -58,16 +57,12 @@ function search_engine_init ()
         delete_option('search_engine_version');
         add_option('search_engine_version',SEARCH_ENGINE_VERSION);
     }
-
     // thx gravity forms, great way of integration with members!
     if ( function_exists( 'members_get_capabilities' ) ){
         add_filter('members_get_capabilities', 'search_engine_get_capabilities');
-
         if(current_user_can("search_engine_full_access"))
             $current_user->remove_cap("search_engine_full_access");
-
         $is_admin_with_no_permissions = current_user_can("administrator") && !search_engine_current_user_can_any(search_engine_capabilities());
-
         if($is_admin_with_no_permissions)
         {
             $role = get_role("administrator");
@@ -98,13 +93,11 @@ function search_engine_current_user_can_any ($caps)
 {
     if(!is_array($caps))
         return current_user_can($caps) || current_user_can("search_engine_full_access");
-
     foreach($caps as $cap)
     {
         if(current_user_can($cap))
             return true;
     }
-
     return current_user_can("search_engine_full_access");
 }
 function search_engine_current_user_can_which ($caps)
@@ -114,34 +107,30 @@ function search_engine_current_user_can_which ($caps)
         if(current_user_can($cap))
             return $cap;
     }
-
     return "";
 }
 function search_engine_menu ()
 {
     global $wpdb;
-    $has_full_access = current_user_can("search_engine_full_access");
-    if(!$has_full_access&&current_user_can("administrator"))
+    $has_full_access = current_user_can('search_engine_full_access');
+    if(!$has_full_access&&current_user_can('administrator'))
         $has_full_access = true;
-
     $min_cap = search_engine_current_user_can_which(search_engine_capabilities());
     if(empty($min_cap))
-        $min_cap = "search_engine_full_access";
-
+        $min_cap = 'search_engine_full_access';
     $templates = @count($wpdb->get_results('SELECT id FROM '.SEARCH_ENGINE_TBL.'templates LIMIT 1'));
-
-    add_menu_page('Search Engine', 'Search Engine', $has_full_access ? "read" : $min_cap, 'search-engine', null, WP_PLUGIN_URL.'/search-engine/assets/icons/search_16.png');
-    add_submenu_page('search-engine', 'Wizard', 'Wizard', $has_full_access ? "read" : "search_engine_index_templates", 'search-engine', 'search_engine_wizard');
+    add_menu_page('Search Engine', 'Search Engine', $has_full_access ? 'read' : $min_cap, 'search-engine', null, WP_PLUGIN_URL.'/search-engine/assets/icons/search_16.png');
+    add_submenu_page('search-engine', 'Wizard', 'Wizard', $has_full_access ? 'read' : 'search_engine_index', 'search-engine', 'search_engine_wizard');
     if(0<$templates)
-        add_submenu_page('search-engine', 'Index Templates', 'Index Templates', $has_full_access ? "read" : "search_engine_index", 'search-engine-index', 'search_engine_index');
+        add_submenu_page('search-engine', 'Index Templates', 'Index Templates', $has_full_access ? 'read' : 'search_engine_index_templates', 'search-engine-index-templates', 'search_engine_index_templates');
     /* COMING SOON! :-)
-    add_submenu_page('search-engine', 'XML Sitemaps', 'XML Sitemaps', $has_full_access ? "read" : "search_engine_view_indexmaps", 'search-engine-xml-sitemaps', 'search_engine_xml_sitemaps');
-    add_submenu_page('search-engine', 'Groups', 'Groups', $has_full_access ? "read" : "search_engine_groups", 'search-engine-groups', 'search_engine_groups');
-    add_submenu_page('search-engine', 'View Index', 'View Index', $has_full_access ? "read" : "search_engine_view_index", 'search-engine-view-index', 'search_engine_view_index');
-    add_submenu_page('search-engine', 'Search Settings', 'Search Settings', $has_full_access ? "read" : "search_engine_search_settings", 'search-engine-search-settings', 'search_engine_search_settings');
-    add_submenu_page('search-engine', 'View  Search Logs', 'View Search Logs', $has_full_access ? "read" : "search_engine_logs", 'search-engine-logs', 'search_engine_logs');
+    add_submenu_page('search-engine', 'XML Sitemaps', 'XML Sitemaps', $has_full_access ? 'read' : 'search_engine_view_indexmaps', 'search-engine-xml-sitemaps', 'search_engine_xml_sitemaps');
+    add_submenu_page('search-engine', 'Groups', 'Groups', $has_full_access ? 'read' : 'search_engine_groups', 'search-engine-groups', 'search_engine_groups');
+    add_submenu_page('search-engine', 'View Index', 'View Index', $has_full_access ? 'read' : 'search_engine_view_index', 'search-engine-view-index', 'search_engine_view_index');
+    add_submenu_page('search-engine', 'View  Search Logs', 'View Search Logs', $has_full_access ? 'read' : 'search_engine_logs', 'search-engine-logs', 'search_engine_logs');
     */
-    add_submenu_page('search-engine', 'About', 'About', 'read', 'search-engine-about', 'search_engine_about');
+    add_submenu_page('search-engine', 'Settings', 'Settings', $has_full_access ? 'read' : 'search_engine_settings', 'search-engine-settings', 'search_engine_settings');
+    add_submenu_page('search-engine', 'About', 'About', $has_full_access ? 'read' : $min_cap, 'search-engine-about', 'search_engine_about');
 }
 function search_engine_wizard ()
 {
@@ -153,7 +142,7 @@ function search_engine_wizard ()
     {
 ?>
 <div class="wrap">
-    <div id="icon-edit-pages" class="icon32" style="background-position:0 0;background-image:url(<?php echo WP_CONTENT_URL; ?>/plugins/search-engine/assets/icons/search_32.png);"><br /></div>
+    <div id="icon-edit-pages" class="icon32" style="background-position:0 0;background-image:url(<?php echo WP_PLUGIN_URL; ?>/search-engine/assets/icons/search_32.png);"><br /></div>
     <h2>Search Engine - Easy Indexing Wizard</h2>
     <div style="height:20px;"></div>
 <form method="post" action="<?php echo $_SERVER['REQUEST_URI']; ?>&action=run">
@@ -288,7 +277,6 @@ function search_engine_wizard ()
         </p>
     </div>
 </form>
-
 </div>
 <?php
     }
@@ -364,16 +352,16 @@ function search_engine_wizard_run ()
         $template_id = $_GET['template_id'];
 ?>
 <div class="wrap">
-    <div id="icon-edit-pages" class="icon32" style="background-position:0 0;background-image:url(<?php echo WP_CONTENT_URL; ?>/plugins/search-engine/assets/icons/search_32.png);"><br /></div>
+    <div id="icon-edit-pages" class="icon32" style="background-position:0 0;background-image:url(<?php echo WP_PLUGIN_URL; ?>/search-engine/assets/icons/search_32.png);"><br /></div>
     <h2>Search Engine - Easy Indexing Wizard</h2>
     <div style="height:20px;"></div>
     <p>Please wait while your site is spidered and indexed.</p>
     <p class="submit">
         <input type="button" name="Advanced" class="button-secondary" value="Show Detailed Progress" onclick="jQuery('#search_engine_advanced').toggle();this.value=(this.value=='Show Detailed Progress'?'Hide Detailed Progress':'Show Detailed Progress');jQuery('#scroller').stop().scrollTo('100%','0%', { axis:'y' });" />
     </p>
-    <link  type="text/css" rel="stylesheet" href="<?php echo WP_CONTENT_URL; ?>/plugins/search-engine/assets/admin.css" />
-    <script type="text/javascript" src="<?php echo WP_CONTENT_URL; ?>/plugins/search-engine/assets/admin.js"></script>
-    <script type="text/javascript" src="<?php echo WP_CONTENT_URL; ?>/plugins/search-engine/assets/jquery.scrollto.js"></script>
+    <link  type="text/css" rel="stylesheet" href="<?php echo WP_PLUGIN_URL; ?>/search-engine/assets/admin.css" />
+    <script type="text/javascript" src="<?php echo WP_PLUGIN_URL; ?>/search-engine/assets/admin.js"></script>
+    <script type="text/javascript" src="<?php echo WP_PLUGIN_URL; ?>/search-engine/assets/jquery.scrollto.js"></script>
     <script type="text/javascript">
         jQuery(function()
         {
@@ -381,10 +369,10 @@ function search_engine_wizard_run ()
         });
     </script>
     <div class="search_engine_wizard">
-        <div class="loader"><img src="<?php echo WP_CONTENT_URL; ?>/plugins/search-engine/assets/images/ajax-loader.gif" alt="AJAX Loader" /></div>
+        <div class="loader"><img src="<?php echo WP_PLUGIN_URL; ?>/search-engine/assets/images/ajax-loader.gif" alt="AJAX Loader" /></div>
         <div id="search_engine_advanced">
-            <iframe src ="<?php echo WP_CONTENT_URL; ?>/plugins/search-engine/cronjob.php?site_id=<?php echo $site_id; ?>&template_id=<?php echo $template_id; ?>&token=<?php echo $token; ?>" width="100%" height="500px" id="scroller" onload="iframedone('#scroller');">
-                <p>Your browser does not support iframes.</p>
+            <iframe src ="<?php echo WP_PLUGIN_URL; ?>/search-engine/cronjob.php?<?php echo ($site_id>0)?'site_id='.$site_id.'&':''; ?>template_id=<?php echo $template_id; ?>&token=<?php echo $token; ?>" width="100%" height="500px" id="scroller" onload="iframedone('#scroller');">
+                <p>Your browser does not support iframes. <a href="<?php echo WP_PLUGIN_URL; ?>/search-engine/cronjob.php?<?php echo ($site_id>0)?'site_id='.$site_id.'&':''; ?>template_id=<?php echo $template_id; ?>&token=<?php echo $token; ?>">Click here to run the index.</a></p>
             </iframe>
             <p id="startstop"><span class="startstop stop">[<a href="#" onclick="clearTimeout(t);jQuery('.startstop').toggle();return false;">pause autoscrolling</a>]</span><span class="startstop">[<a href="#" onclick="t = setTimeout('tothetop()',1000);jQuery('.startstop').toggle();return false;">resume autoscrolling</a>]</span></p>
             <div class="loader"></div>
@@ -393,7 +381,7 @@ function search_engine_wizard_run ()
 </div>
 <?php
 }
-function search_engine_index ()
+function search_engine_index_templates ()
 {
     require_once SEARCH_ENGINE_DIR.'/classes/API.class.php';
     if(isset($_GET['do'])&&$_GET['do']=='save'&&!empty($_POST))
@@ -651,6 +639,31 @@ function search_engine_logs ()
     $admin = new Search_Engine_Admin(array('item'=>'Search Log','items'=>'Search Logs','table'=>SEARCH_ENGINE_TBL.'log','columns'=>array('query','time'=>array('type'=>'date','label'=>'Date of Search'),'elapsed'=>array('label'=>'Processing Time'),'results'=>array('label'=>'Total Results Found')),'add'=>false,'edit'=>false,'delete'=>false,'icon'=>WP_PLUGIN_URL.'/search-engine/assets/icons/search_32.png'));
     $admin->go();
 }
+function search_engine_settings ()
+{
+?>
+<div class="wrap">
+    <div id="icon-edit-pages" class="icon32" style="background-position:0 0;background-image:url(<?php echo WP_PLUGIN_URL; ?>/search-engine/assets/icons/search_32.png);"><br /></div>
+    <h2>Search Engine - Settings</h2>
+    <div style="height:20px;"></div>
+    <form method="post" action="">
+        <table class="form-table">
+            <tr valign="top">
+                <th scope="row"><label for="cronjob_token">Cronjob Token</label></th>
+                <td>
+                    <input name="cronjob_token" type="text" id="cronjob_token" size="50" value="<?php echo get_option('search_engine_token'); ?>" /><br />
+                    <span class="description">By default, this is generated based on your secure keys from wp-config.php - but you can change it here. Make sure it's secure and that no one else gets this -- this key allows you to Index your site from a Cronjob on your server or by accessing the URL.<br />
+                        <label for="cronjob_url" style="font-style:normal;"><strong>URL to Cronjob:</strong></label><br /><input type="text" id="cronjob_url" size="120" value="<?php echo WP_PLUGIN_URL; ?>/search-engine/cronjob.php?template_id=YOUR_TEMPLATE_ID&token=<?php echo get_option('search_engine_token'); ?>" /></span>
+                </td>
+            </tr>
+        </table>
+        <p class="submit">
+            <input type="submit" name="Submit" class="button-primary" value="Save Settings" />
+        </p>
+    </form>
+</div>
+<?php
+}
 function search_engine_search_settings ()
 {
     global $wpdb;
@@ -679,14 +692,15 @@ function search_engine_about ()
 {
 ?>
 <div class="wrap">
-    <div id="icon-edit-pages" class="icon32" style="background-position:0 0;background-image:url(<?php echo WP_CONTENT_URL; ?>/plugins/search-engine/assets/icons/search_32.png);"><br /></div>
+    <div id="icon-edit-pages" class="icon32" style="background-position:0 0;background-image:url(<?php echo WP_PLUGIN_URL; ?>/search-engine/assets/icons/search_32.png);"><br /></div>
     <h2>About the Search Engine plugin</h2>
     <div style="height:20px;"></div>
-    <link  type="text/css" rel="stylesheet" href="<?php echo WP_CONTENT_URL; ?>/plugins/search-engine/assets/admin.css" />
+    <link  type="text/css" rel="stylesheet" href="<?php echo WP_PLUGIN_URL; ?>/search-engine/assets/admin.css" />
     <table class="form-table about">
         <tr valign="top">
-            <th scope="row">Plugin Author</th>
-            <td><a href="http://www.scottkclark.com/">Scott Kingsley Clark</a></td>
+            <th scope="row">About the Plugin Author</th>
+            <td><a href="http://www.scottkclark.com/">Scott Kingsley Clark</a> from <a href="http://skcdev.com/">SKC Development</a>
+                <span class="description">Scott specializes in WordPress and Pods CMS Framework development using PHP, MySQL, and AJAX. Scott is also a developer on the <a href="http://podscms.org/">Pods CMS Framework</a> plugin and has a creative outlet in music with his <a href="http://www.softcharisma.com/">Soft Charisma</a></span></td>
         </tr>
         <tr valign="top">
             <th scope="row">Official Support</th>
@@ -696,8 +710,9 @@ function search_engine_about ()
             <th scope="row">Plugin Contributors</th>
             <td>
                 <ul>
-                    <li><a href="http://studioslice.com/">Greg Dean</a> - PHP Development for Search.class.php</li>
-                    <li><a href="http://gaarai.com/">Chris Jean</a> from <a href="http://ithemes.com/">iThemes</a> - PHP Development for Displaying Results on Search Pages</li>
+                    <li><a href="http://www.flickr.com/people/piratedrock/">Derek Beaton</a> - PHP Development for Search.class.php on AND / OR / "Exact Phrase" searching</li>
+                    <li><a href="http://studioslice.com/">Greg Dean</a> - Initial PHP Development help for Search.class.php</li>
+                    <li><a href="http://gaarai.com/">Chris Jean</a> from <a href="http://ithemes.com/">iThemes</a> - PHP Development for Displaying Results on WP Search Pages</li>
                     <li><a href="http://randyjensenonline.com/">Randy Jansen</a> - HTML / CSS Development for Wizard UI and Search Results Template</li>
                     <li><a href="http://cdharrison.com/">cdharrison</a> - Icon Consulting</li>
                     <li><a href="http://andyweigel.com/">Andy Weigel</a> - PHP Consulting</li>
@@ -735,7 +750,7 @@ function search_engine_about ()
                             <li>Depth Restricting - Restrict how deep spidering goes</li>
                             <li>URL Words Whitelist / Blacklist - Include or Exclude URLs from being spidered based on words</li>
                             <li>.htaccess Password Protection Support - Optional Username / Password can be passed to Spider to access restricted areas</li>
-                            <li>cronjob.php - Script to use when setting up Server Cronjob settings - Can Spider based on Site or Template</li>
+                            <li>cronjob.php - Script to use when setting up Server Cronjob settings - Can Spider based on Site or Template - URL found in Search Engine Settings panel</li>
                         </ul>
                     </li
                     <li><strong>Index</strong>
@@ -747,6 +762,7 @@ function search_engine_about ()
                     </li>
                     <li><strong>Search</strong>
                         <ul>
+                            <li>AND / OR / "Exact Phrase" multi-combination Support</li>
                             <li>OR Support</li>
                             <li>Shortcode can be used in WP Pages to display form and search specific site(s) (by site ID) - [search_engine sites="1,4,5"]</li>
                             <li>search_engine_form() to display the Search Engine form anywhere on your site - Note, form points to the root of your site for search like normal WP search</li>
@@ -760,11 +776,10 @@ function search_engine_about ()
             <th scope="row">Upcoming Features - Roadmap</th>
             <td>
                 <dl>
-                    <dt>0.5.0</dt>
+                    <dt>0.5.1</dt>
                     <dd>
                         <ul>
                             <li>Search Settings - Setup / control multiple searches on your site</li>
-                            <li>AND / OR / "Exact Phrase" multi-combination Support</li>
                             <li>Negative Keyword Matching using -word Format</li>
                             <li>View Search Logs - View queries recently typed, how long it took them to process, and how many results were returned</li>
                             <li>Cronjob Groups - Ability to run multiple templates at a time based on Cronjob Group in cronjob.php</li>
@@ -785,8 +800,11 @@ add_action('admin_init','search_engine_init');
 add_action('admin_menu','search_engine_menu');
 
 global $search_engine;
-add_filter( 'the_posts', 'search_engine_get_posts' );
-add_shortcode('search_engine','search_engine_content');
+if(!is_admin())
+{
+    add_filter( 'the_posts', 'search_engine_get_posts' );
+    add_shortcode('search_engine','search_engine_content');
+}
 
 function search_engine_get_posts ( $posts ) {
     // Don't do anything for views that aren't search results

@@ -244,7 +244,7 @@ class Search_Engine_Search
     }
     function search_do_excerpt ($content,$limit=300)
     {
-        $terms = explode(' ',$this->search_string);
+        $terms = explode(' ',html_entity_decode($this->search_string));
         $terms = array_filter($terms);
         $excerpt_length = $limit;
         $excerpting = false;
@@ -295,7 +295,7 @@ class Search_Engine_Search
         if($excerpting)
             $excerpt = $excerpt . "...";
 
-        return $excerpt;
+        return htmlentities($excerpt);
     }
     function highlight_terms ($excerpt, $terms)
     {

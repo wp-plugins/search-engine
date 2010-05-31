@@ -22,9 +22,14 @@ So... that means Sidebars, Widgets, Pages, Posts, Custom Post Types, Pod Pages, 
 
 == Frequently Asked Questions ==
 
-What if my site or parts of my site is password protected? Currently, only htaccess password protected pages are supported, in the future I plan to support multiple indexes (depending what user group it's set to index as).
+What if my site or parts of my site is password protected? Currently, only htaccess password protected pages are supported, I'm currently working towards supporting WordPress User Authenticated indexing (depending what user group it's set to index as).
 
 == Changelog ==
+
+= 0.5.0 =
+* AND / OR / "Exact Phrase" multi-combination Support
+* Bug fixes in indexing
+* Bug fixes in search
 
 = 0.4.7 =
 * Bug fixes in indexing
@@ -61,6 +66,11 @@ What if my site or parts of my site is password protected? Currently, only htacc
 * First official release to the public as a plugin
 
 == Upgrade Notice ==
+
+= 0.5.0 =
+* AND / OR / "Exact Phrase" multi-combination Support
+* Bug fixes in indexing
+* Bug fixes in search
 
 = 0.4.7 =
 * Bug fixes in indexing
@@ -109,7 +119,11 @@ OR you can just install it with WordPress by going to Plugins >> Add New >> and 
 
 Search Engine - Support Forums: http://www.scottkclark.com/forums/search-engine/
 
-== Plugin Contributors ==
+== About the Plugin Author ==
+
+Scott Kingsley Clark from SKC Development -- Scott specializes in WordPress and Pods CMS Framework development using PHP, MySQL, and AJAX. Scott is also a developer on the Pods CMS Framework plugin
+
+== Other Plugin Contributors ==
 
 * Greg Dean - PHP Development for Search.class.php
 * Chris Jean from iThemes - PHP Development for Displaying Results on Search Pages
@@ -148,6 +162,7 @@ These testers are especially helping make this Beta plugin get to 1.0! If you ar
 * Index Weight Assignment - Based on how often keywords are used, and in which places they are found, a weight is given to a URL to create relevancy
 
 = Search =
+* AND / OR / "Exact Phrase" multi-combination Support
 * OR Support
 * Shortcode can be used in WP Pages to display form and search specific site(s) (by site ID) - [search_engine sites="1,4,5"]
 * search_engine_form() to display the Search Engine form anywhere on your site - Note, form points to the root of your site for search like normal WP search
@@ -155,9 +170,8 @@ These testers are especially helping make this Beta plugin get to 1.0! If you ar
 
 == Roadmap ==
 
-= 0.5.0 =
+= 0.5.1 =
 * Search Settings - Setup/control multiple searches on your site
-* AND / OR / "Exact Phrase" multi-combination Support
 * Negative Keyword Matching using -word Format
 * View Search Logs - View queries recently typed, how long it took them to process, and how many results were returned
 * Cronjob Groups - Ability to run multiple templates at a time based on Cronjob Group in cronjob.php
