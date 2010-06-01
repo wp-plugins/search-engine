@@ -14,7 +14,7 @@ class Search_Engine_Search
     var $results_per_page = 5;
     var $page = 1;
 
-    function __construct($site_ids=null)
+    function __construct($site_ids=false,$template_ids=false)
     {
         global $wpdb;
         $this->query_string = 'SELECT
@@ -31,6 +31,18 @@ class Search_Engine_Search
             foreach($site_ids as $site_id)
             {
                 $sql[] = $wpdb->prepare(SEARCH_ENGINE_TBL.'links.site=%d',array($site_id));
+            }
+            $sql = '('.implode(' OR ',$sql).')';
+            $this->site_string = $sql;
+            $this->query_string .= "$sql AND ";
+        }
+        if(!empty($template_ids)&&is_array($template_ids))
+        {
+            $this->template_ids = $template_ids;
+            $sql = array();
+            foreach($template_ids as $template_id)
+            {
+                $sql[] = $wpdb->prepare('('.SEARCH_ENGINE_TBL.'links.site='.SEARCH_ENGINE_TBL.'templates.site AND '.SEARCH_ENGINE_TBL.'templates.id=%d)',array($template_id));
             }
             $sql = '('.implode(' OR ',$sql).')';
             $this->site_string = $sql;
@@ -227,7 +239,6 @@ class Search_Engine_Search
         else{
         	//empty
         }
-
 		//ALWAYS THE STRING - EVERYTHING BEFORE IRRELEVANT
         $this->query_string .= ' GROUP BY '.SEARCH_ENGINE_TBL.'links.url ORDER BY '.SEARCH_ENGINE_TBL.'index.weight DESC '.$limit;
         //DB EDIT
@@ -251,7 +262,6 @@ class Search_Engine_Search
         if($excerpt_length<strlen($content))
             $excerpting = true;
         $excerpt = "";
-
         $start = false;
         foreach ($terms as $term) {
             if (function_exists('mb_stripos')) {
@@ -267,7 +277,6 @@ class Search_Engine_Search
                     }
                 }
             }
-
             if (false !== $pos) {
                 if ($pos + strlen($term) < $excerpt_length) {
                     $excerpt = mb_substr($content, 0, $excerpt_length);
@@ -282,20 +291,17 @@ class Search_Engine_Search
                 }
             }
         }
-
+        $excerpt = htmlentities($excerpt);
         if ("" == $excerpt) {
             $excerpt = mb_substr($content, 0, $excerpt_length);
             $start = true;
         }
         $excerpt = $this->highlight_terms($excerpt, $terms);
-
         if (!$start&&$excerpting)
             $excerpt = "..." . $excerpt;
-
         if($excerpting)
             $excerpt = $excerpt . "...";
-
-        return htmlentities($excerpt);
+        return $excerpt;
     }
     function highlight_terms ($excerpt, $terms)
     {

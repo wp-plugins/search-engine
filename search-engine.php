@@ -884,7 +884,7 @@ function search_engine_form ()
 ?>
 <form action="<?php bloginfo('wpurl'); ?>" method="get">
     <input name="s" type="text" size="16" value="<?php echo htmlentities($query); ?>" />
-    <input name="submit" type="submit" value="Search" />
+    <input type="submit" value="Search" />
 </form>
 <?php
 }
@@ -902,8 +902,15 @@ function search_engine_content ($atts=false)
     $css = 1;
     if($atts!==false)
     {
-        $atts = shortcode_atts(array('sites'=>$site_id,'css'=>1),$atts);
+        $atts = shortcode_atts(array('sites'=>$site_id,'templates'=>false,'css'=>1),$atts);
         $site_ids = explode(',',$atts['sites']);
+        $template_ids = explode(',',$atts['templates']);
+        if(!empty($template_ids))
+            $site_ids = false;
+        else
+            $template_ids = false;
+        if(empty($site_ids))
+            $site_ids = false;
         $css = $atts['css'];
         if($css!=1)
             $css = 0;
@@ -914,7 +921,7 @@ function search_engine_content ($atts=false)
         $query = stripslashes($_GET['q']);
     elseif(isset($_GET['s']))
         $query = stripslashes($_GET['s']);
-    $search = new Search_Engine_Search($site_ids);
+    $search = new Search_Engine_Search($site_ids,$template_ids);
     if(isset($_GET['pg'])&&ctype_digit($_GET['pg'])&&0<$_GET['pg'])
     {
         $search->page = $_GET['pg'];
@@ -957,7 +964,7 @@ function search_engine_content ($atts=false)
     $replace = http_build_query($replace);
     $request_uri = str_replace($explode,$replace,$request_uri).'&';
 ?>
-	<p>Results <strong><?php if($search->total_results<1){ echo 0; } else { echo $begin; ?> - <?php echo $end; } ?></strong> of <strong><?php echo $search->total_results; ?></strong> for <strong><?php echo htmlentities($query); ?></strong></p>
+	<p>Result<?php echo ($search->total_results==1&&!empty($results))?'':'s'; ?> <strong><?php if($search->total_results<1||empty($results)){ echo 0; } else { echo $begin; ?> - <?php echo $end; } ?></strong> of <strong><?php if($search->total_results<1||empty($results)){ echo 0; } else { echo $search->total_results; } ?></strong> for <strong><?php echo htmlentities($query); ?></strong></p>
 </div>
 <?php
     if(!empty($results))
