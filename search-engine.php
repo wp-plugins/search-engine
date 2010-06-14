@@ -883,7 +883,7 @@ function search_engine_form ()
         $query = stripslashes($_GET['s']);
 ?>
 <form action="<?php bloginfo('wpurl'); ?>" method="get">
-    <input name="s" type="text" size="16" value="<?php echo htmlentities($query); ?>" />
+    <input name="s" type="text" size="16" value="<?php echo htmlentities($query,ENT_COMPAT,'UTF-8'); ?>" />
     <input type="submit" value="Search" />
 </form>
 <?php
@@ -938,7 +938,7 @@ function search_engine_content ($atts=false)
 ?>
 <div id="search_engine_Area">
 <form action="<?php echo $_SERVER['REQUEST_URI']; ?>" method="get">
-    <input name="<?php echo (!wp_style_is('search-engine')?'q':'s'); ?>" type="text" size="41" class="search_engine_Box" value="<?php echo htmlentities($query); ?>" />
+    <input name="<?php echo (!wp_style_is('search-engine')?'q':'s'); ?>" type="text" size="41" class="search_engine_Box" value="<?php echo htmlentities($query,ENT_COMPAT,'UTF-8'); ?>" />
     <input name="submit" type="submit" value="Search" class="search_engine_Button" /><?php if(defined('SEARCH_ENGINE_ADVANCED_URL')){ ?><br />
     <a href="<?php echo SEARCH_ENGINE_ADVANCED_URL; ?>" class="search_engine_Advanced">Go to Advanced Search</a><?php } ?>
 </form>
@@ -964,7 +964,7 @@ function search_engine_content ($atts=false)
     $replace = http_build_query($replace);
     $request_uri = str_replace($explode,$replace,$request_uri).'&';
 ?>
-	<p>Result<?php echo ($search->total_results==1&&!empty($results))?'':'s'; ?> <strong><?php if($search->total_results<1||empty($results)){ echo 0; } else { echo $begin; ?> - <?php echo $end; } ?></strong> of <strong><?php if($search->total_results<1||empty($results)){ echo 0; } else { echo $search->total_results; } ?></strong> for <strong><?php echo htmlentities($query); ?></strong></p>
+	<p>Result<?php echo ($search->total_results==1&&!empty($results))?'':'s'; ?> <strong><?php if($search->total_results<1||empty($results)){ echo 0; } else { echo $begin; ?> - <?php echo $end; } ?></strong> of <strong><?php if($search->total_results<1||empty($results)){ echo 0; } else { echo $search->total_results; } ?></strong> for <strong><?php echo htmlentities($query,ENT_COMPAT,'UTF-8'); ?></strong></p>
 </div>
 <?php
     if(!empty($results))

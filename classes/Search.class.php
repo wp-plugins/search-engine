@@ -291,7 +291,7 @@ class Search_Engine_Search
                 }
             }
         }
-        $excerpt = htmlentities($excerpt);
+        $excerpt = htmlentities($excerpt,ENT_COMPAT,'UTF-8');
         if ("" == $excerpt) {
             $excerpt = mb_substr($content, 0, $excerpt_length);
             $start = true;

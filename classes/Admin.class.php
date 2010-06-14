@@ -821,13 +821,13 @@ class Search_Engine_Admin
                     if($this->view)
                     {
 ?>
-            <td class="post-title page-title column-title"><strong><a class="row-title" href="<?php echo $this->var_update(array('action'=>'view','id'=>$row['id'])); ?>" title="View &#8220;<?php echo htmlentities($row[$column]); ?>&#8221;"><?php echo $row[$column]; ?></a></strong>
+            <td class="post-title page-title column-title"><strong><a class="row-title" href="<?php echo $this->var_update(array('action'=>'view','id'=>$row['id'])); ?>" title="View &#8220;<?php echo htmlentities($row[$column],ENT_COMPAT,'UTF-8'); ?>&#8221;"><?php echo $row[$column]; ?></a></strong>
 <?php
                     }
                     elseif($this->edit)
                     {
 ?>
-            <td class="post-title page-title column-title"><strong><a class="row-title" href="<?php echo $this->var_update(array('action'=>'edit','id'=>$row['id'])); ?>" title="Edit &#8220;<?php echo htmlentities($row[$column]); ?>&#8221;"><?php echo $row[$column]; ?></a></strong>
+            <td class="post-title page-title column-title"><strong><a class="row-title" href="<?php echo $this->var_update(array('action'=>'edit','id'=>$row['id'])); ?>" title="Edit &#8220;<?php echo htmlentities($row[$column],ENT_COMPAT,'UTF-8'); ?>&#8221;"><?php echo $row[$column]; ?></a></strong>
 <?php
                     }
                     else
@@ -837,7 +837,7 @@ class Search_Engine_Admin
 <?php
                     }
 ?>
-            <div class="row-actions"><?php if(isset($this->custom['action_start'])&&function_exists("{$this->custom['action_start']}")){$this->custom['action_start']($this,$row);} if($this->view){ ?><span class='view'><a href="<?php echo $this->var_update(array('action'=>'view','id'=>$row['id'])); ?>" title="View this item">View</a><?php if($this->edit||$this->delete){ ?> | <?php } ?></span><?php } if(isset($this->custom['action_end_view'])&&function_exists("{$this->custom['action_end_view']}")){$this->custom['action_end_view']($this,$row);} if($this->edit){ ?><span class='edit'><a href="<?php echo $this->var_update(array('action'=>'edit','id'=>$row['id'])); ?>" title="Edit this item">Edit</a></span><?php } if($this->delete){ ?><span class='delete'><?php if($this->edit){ ?> | <?php } ?><a class='submitdelete' title='Delete this item' href='<?php echo $this->var_update(array('action'=>'delete','id'=>$row['id'])); ?>' onclick="if ( confirm('You are about to delete this item \'<?php echo htmlentities($row[$column]); ?>\'\n \'Cancel\' to stop, \'OK\' to delete.') ) { return true;}return false;">Delete</a></span><?php } if(isset($this->custom['action_end'])&&function_exists("{$this->custom['action_end']}")){$this->custom['action_end']($this,$row);} ?></div></td>
+            <div class="row-actions"><?php if(isset($this->custom['action_start'])&&function_exists("{$this->custom['action_start']}")){$this->custom['action_start']($this,$row);} if($this->view){ ?><span class='view'><a href="<?php echo $this->var_update(array('action'=>'view','id'=>$row['id'])); ?>" title="View this item">View</a><?php if($this->edit||$this->delete){ ?> | <?php } ?></span><?php } if(isset($this->custom['action_end_view'])&&function_exists("{$this->custom['action_end_view']}")){$this->custom['action_end_view']($this,$row);} if($this->edit){ ?><span class='edit'><a href="<?php echo $this->var_update(array('action'=>'edit','id'=>$row['id'])); ?>" title="Edit this item">Edit</a></span><?php } if($this->delete){ ?><span class='delete'><?php if($this->edit){ ?> | <?php } ?><a class='submitdelete' title='Delete this item' href='<?php echo $this->var_update(array('action'=>'delete','id'=>$row['id'])); ?>' onclick="if ( confirm('You are about to delete this item \'<?php echo htmlentities($row[$column],ENT_COMPAT,'UTF-8'); ?>\'\n \'Cancel\' to stop, \'OK\' to delete.') ) { return true;}return false;">Delete</a></span><?php } if(isset($this->custom['action_end'])&&function_exists("{$this->custom['action_end']}")){$this->custom['action_end']($this,$row);} ?></div></td>
 <?php
                 }
                 elseif($attributes['id']=='date')
