@@ -3,8 +3,38 @@ global $wpdb;
 if(!is_object($wpdb))
 {
     ob_start();
-    require_once(realpath('../../../wp-load.php'));
+    if(file_exists(realpath('../../../../wp-load.php')))
+    {
+        require_once(realpath('../../../../wp-load.php'));
+    }
+    else
+    {
+        require_once(realpath('../../../wp-load.php'));
+    }
     ob_end_clean();
+}
+// FOR EXPORTS ONLY
+if(isset($_GET['download'])&&!isset($_GET['page'])&&is_user_logged_in())
+{
+    do_action('wp_ui_admin_export_download');
+    $file = WP_CONTENT_DIR.'/exports/'.str_replace('/','',$_GET['export']);
+    if(!isset($_GET['export'])||empty($_GET['export'])||!file_exists($file))
+    {
+        die('File not found.');
+    }
+    // required for IE, otherwise Content-disposition is ignored
+    if(ini_get('zlib.output_compression'))
+        ini_set('zlib.output_compression','Off');
+    header("Pragma: public"); // required
+    header("Expires: 0");
+    header("Cache-Control: must-revalidate, post-check=0, pre-check=0");
+    header("Cache-Control: private",false); // required for certain browsers
+    header("Content-Type: application/force-download");
+    header("Content-Disposition: attachment; filename=\"".basename($file)."\";" );
+    header("Content-Transfer-Encoding: binary");
+    header("Content-Length: ".filesize($file));
+    readfile("$file");
+    exit();
 }
 /**
  * Admin UI class for WordPress plugins
@@ -12,34 +42,46 @@ if(!is_object($wpdb))
  * Creates a UI for any plugn screens within WordPress
  *
  * NOTE: If you are including this class in a plugin,
- * please rename it to avoid conflicts with other plugins
+ * consider renaming the class to avoid conflicts with other plugins.
+ * This is not required, but some developers may include the class
+ * the wrong way which could cause an issue with your including the
+ * class file.
  *
  * @package Admin UI for Plugins
  *
- * @version 1.0.0
+ * @version 1.2.0
  * @author Scott Kingsley Clark
  * @link http://www.scottkclark.com/
  *
  * @param mixed $options
  */
-class Search_Engine_Admin
+class WP_UI_Admin
 {
+    // base
     var $item = 'Item';
     var $items = 'Items';
+    var $heading = array('manage'=>'Manage');
     var $table = false;
     var $icon = false;
+    var $css = false;
 
+    // actions
     var $add = true;
     var $view = false;
     var $edit = true;
     var $delete = true;
     var $save = true;
+    var $readonly = false;
+    var $export = false;
 
+    // array of custom functions to run for actions / etc
     var $custom = array();
 
+    // data related
     var $total = 0;
     var $columns = array();
     var $data = array();
+    var $full_data = array();
     var $row = array();
     var $order_columns = array();
     var $search_columns = array();
@@ -47,25 +89,35 @@ class Search_Engine_Admin
     var $view_columns = array();
     var $insert_id = 0;
 
+    // other options
     var $id = false;
     var $action = 'manage';
     var $do = false;
-    var $search = false;
+    var $search = true;
+    var $search_query = false;
+    var $pagination = true;
     var $page = 1;
     var $limit = 25;
     var $order = 'id';
     var $order_dir = 'DESC';
+    var $sql = false;
+
+    // export options
+    var $export_dir = WP_CONTENT_DIR.'/exports';
+    var $export_url = WP_CONTENT_URL.(str_replace(WP_CONTENT_DIR,'',__FILE__)).'?download=1&export=';
 
     function __construct ($options=false)
     {
+        do_action('wp_ui_admin_init');
+        $options = apply_filters('wp_ui_admin_options',$options);
         if(false!==$this->get_var('id'))
             $this->id = $_GET['id'];
-        if(false!==$this->get_var('action',false,array('add','edit','view','delete','manage')))
+        if(false!==$this->get_var('action',false,array('add','edit','view','delete','manage','export')))
             $this->action = $_GET['action'];
-        if(false!==$this->get_var('do',false,array('save')))
+        if(false!==$this->get_var('do',false,array('save','create')))
             $this->do = $_GET['do'];
-        if(false!==$this->get_var('search'))
-            $this->search = $_GET['search'];
+        if(false!==$this->get_var('search_query'))
+            $this->search_query = $_GET['search_query'];
         if(false!==$this->get_var('pg'))
             $this->page = $_GET['pg'];
         if(false!==$this->get_var('limit'))
@@ -74,6 +126,8 @@ class Search_Engine_Admin
             $this->order = $_GET['order'];
         if(false!==$this->get_var('order_dir',false,array('ASC','DESC')))
             $this->order_dir = $_GET['order_dir'];
+        if(false!==$this->get_var('action',false,'export')&&false!==$this->get_var('export_type',false,array('csv','tab','xml','json')))
+            $this->export_type = $_GET['export_type'];
         if(false!==$options&&!empty($options))
         {
             if(!is_array($options))
@@ -81,6 +135,9 @@ class Search_Engine_Admin
             foreach($options as $option=>$value)
                 $this->$option = $value;
         }
+        if(false!==$this->readonly)
+            $this->add = $this->edit = $this->delete = $this->save = false;
+        $this = apply_filters('wp_ui_admin',$this,$options);
     }
     function get_var ($index,$default=false,$allowed=false,$array=false)
     {
@@ -91,25 +148,16 @@ class Search_Engine_Admin
             else
                 $array = $_GET;
         }
-        if(isset($array[$index]))
-        {
-            if($allowed!==false)
-            {
-                if(is_array($allowed))
-                {
-                    if(!in_array($array[$index],$allowed))
-                        return $default;
-                }
-                elseif($allowed!=$array[$index])
-                    return $default;
-            }
-            return $array[$index];
-        }
-        else
-            return $default;
+        if(false!==$allowed&&!is_array($allowed))
+            $allowed = array($allowed);
+        $value = $default;
+        if(isset($array[$index])&&$allowed===false)
+            $value = $array[$index];
+        return apply_filters('wp_ui_admin_get_var',$value,array('index'=>$index,'default'=>$default,'allowed'=>$allowed,'array'=>$array),$this);
     }
     function hidden_vars ()
     {
+        $this = apply_filters('wp_ui_admin_hidden_vars',$this);
         foreach($_GET as $k=>$v)
         {
 ?>
@@ -119,7 +167,7 @@ class Search_Engine_Admin
     }
     function var_update($array=false,$allowed=false,$url=false)
     {
-        $excluded = array('do','id','pg','search','order','order_dir','limit','action');
+        $excluded = array('do','id','pg','search_query','order','order_dir','limit','action','export','export_type','remove_export','updated');
         if(false===$allowed)
             $allowed = array();
         if(!isset($_GET))
@@ -147,26 +195,49 @@ class Search_Engine_Admin
             $url = explode('#',$url[0]);
             $url = $url[0];
         }
-        return $url.'?'.http_build_query($get);
+        return apply_filters('wp_ui_admin_var_update',$url.'?'.http_build_query($get),$this);
     }
     function message ($msg)
     {
+        $msg = apply_filters('wp_ui_admin_message',$msg,$this);
 ?>
 	<div id="message" class="updated fade"><p><?php echo $msg; ?></p></div>
 <?php
     }
+    function error ($msg)
+    {
+        $msg = apply_filters('wp_ui_admin_error',$msg,$this);
+?>
+	<div id="message" class="error fade"><p><?php echo $msg; ?></p></div>
+<?php
+    }
     function go ()
     {
-        if($this->action=='add'&&$this->add)
+        $this = apply_filters('wp_ui_admin_go',$this);
+        if($this->css!==false)
+        {
+?>
+    <link  type="text/css" rel="stylesheet" href="<?php echo $this->css; ?>" />
+<?php
+        }
+        if(isset($this->custom[$this->action])&&function_exists("{$this->custom[$this->action]}"))
+            $this->custom[$this->action]($this);
+        elseif($this->action=='add'&&$this->add)
             $this->add();
         elseif($this->action=='edit'&&$this->edit)
             $this->edit();
         elseif($this->action=='delete'&&$this->delete)
             $this->delete();
         elseif($this->do=='save'&&$this->save)
+        {
             $this->save();
+            $this->manage();
+        }
         elseif($this->do=='create'&&$this->save)
+        {
             $this->save(1);
+            $this->manage();
+        }
         elseif($this->action=='view'&&$this->view)
             $this->view();
         else
@@ -174,8 +245,7 @@ class Search_Engine_Admin
     }
     function add ()
     {
-        if(isset($this->custom['add'])&&function_exists("{$this->custom['add']}"))
-            $this->custom['add']($this,1);
+        $this = apply_filters('wp_ui_admin_add',$this);
         if($this->do=='save'&&isset($_POST)&&!empty($_POST))
         {
             $this->save(1);
@@ -192,6 +262,7 @@ class Search_Engine_Admin
     }
     function edit ()
     {
+        $this = apply_filters('wp_ui_admin_edit',$this);
         if(isset($this->custom['edit'])&&function_exists("{$this->custom['edit']}"))
             $this->custom['edit']($this);
         if($this->do=='save'&&isset($_POST)&&!empty($_POST))
@@ -206,38 +277,46 @@ class Search_Engine_Admin
     }
     function form ($create=0)
     {
+        $this = apply_filters('wp_ui_admin_form',$this,$create);
         if(isset($this->custom['form'])&&function_exists("{$this->custom['form']}"))
             return $this->custom['form']($this,$create);
-        if($this->table===false)
-            return $this->message('<strong>Error:</strong> Invalid Configuration - Missing "table" definition.');
+        if($this->table===false&&$this->sql===false)
+            return $this->error('<strong>Error:</strong> Invalid Configuration - Missing "table" definition.');
         global $wpdb;
         if(empty($this->form_columns))
             $this->form_columns = $this->columns;
         $submit = 'Add '.$this->item;
         $id = '';
+        $vars = array('action'=>'manage','do'=>'create','id'=>$id);
         if($create==0)
         {
             if(empty($this->row))
                 $this->get_row();
             if(empty($this->row))
-                return $this->message("<strong>Error:</strong> $this->item not found.");
+                return $this->error("<strong>Error:</strong> $this->item not found.");
             $submit = 'Save Changes';
             $id = $this->row['id'];
+            $vars = array('action'=>'manage','do'=>'save','id'=>$id);
         }
 ?>
-    <form method="post" action="<?php echo $this->var_update(array('action'=>'manage','do'=>'save','id'=>$id)); ?>">
+    <form method="post" action="<?php echo $this->var_update($vars); ?>">
         <table class="form-table">
 <?php
         // available options
         // type = date (data validation as datetime)
+            // date_update = use current timestamp when saving (even if readonly, if type=date)
         // type = text / other (single line text box)
         // type = desc (textarea)
         // type = number (data validation as int float)
         // type = decimal (data validation as decimal)
         // type = password (single line password box)
         // type = bool (single line password box)
+        // type = related (select box)
+            // related = table to relate to (if type=related)
+            // related_field = field name on table to show (if type=related) - default "name"
+            // related_multiple = true (ability to select multiple values if type=related)
+            // related_sql = custom where / order by SQL (if type=related)
         // readonly = true (shows as text)
-        // update = if type=date then use current timestamp when saving (even if readonly)
         // display = false (doesn't show on form, but can be saved)
         foreach($this->form_columns as $column=>$attributes)
         {
@@ -252,10 +331,22 @@ class Search_Engine_Admin
                 $this->row[$column] = '';
             if($attributes['type']=='bool')
                 $selected = ($this->row[$column]==1?' CHECKED':'');
+            if(!isset($attributes['related']))
+                $attributes['related'] = false;
+            if(!isset($attributes['related_field']))
+                $attributes['related_field'] = 'name';
+            if(!isset($attributes['related_multiple']))
+                $attributes['related_multiple'] = false;
+            if(!isset($attributes['related_sql']))
+                $attributes['related_sql'] = false;
             if(!isset($attributes['readonly']))
                 $attributes['readonly'] = false;
-            if(!isset($attributes['update']))
-                $attributes['update'] = false;
+            if(!isset($attributes['readonly']))
+                $attributes['readonly'] = false;
+            if(!isset($attributes['date_update']))
+                $attributes['date_update'] = false;
+            if(isset($attributes['update']))
+                $attributes['date_update'] = $attributes['update'];
             if(!isset($attributes['display']))
                 $attributes['display'] = true;
             if(!isset($attributes['custom_input']))
@@ -316,6 +407,23 @@ class Search_Engine_Admin
             <textarea name="<?php echo $column; ?>" id="admin_ui_<?php echo $column; ?>" rows="10" cols="50"><?php echo $this->row[$column]; ?></textarea>
 <?php
                 }
+                elseif($attributes['type']=='related'&&$attributes['related']!==false)
+                {
+                    $related = $wpdb->get_results('SELECT id,`'.$attributes['related_field'].'` FROM '.$attributes['related'].(!empty($attributes['related_sql'])?' '.$attributes['related_sql']:''));
+?>
+            <select name="<?php echo $column; ?><?php echo ($attributes['related_multiple']!==false?'[]':''); ?>" id="admin_ui_<?php echo $column; ?>"<?php echo ($attributes['related_multiple']!==false?' MULTIPLE':''); ?>>
+<?php
+                    $selected_options = explode(',',$this->row[$column]);
+                    foreach($related as $option)
+                    {
+?>
+                <option value="<?php echo $option->id; ?>"<?php echo (in_array($option->id,$selected_options)?' SELECTED':''); ?>><?php echo $option->$attributes['related_field']; ?></option>
+<?php
+                    }
+?>
+            </select>
+<?php
+                }
                 else
                 {
 ?>
@@ -344,17 +452,18 @@ class Search_Engine_Admin
     }
     function view ()
     {
+        $this = apply_filters('wp_ui_admin_view',$this);
         if(isset($this->custom['view'])&&function_exists("{$this->custom['view']}"))
             return $this->custom['view']($this);
-        if($this->table===false)
-            return $this->message('<strong>Error:</strong> Invalid Configuration - Missing "table" definition.');
+        if($this->table===false&&$this->sql===false)
+            return $this->error('<strong>Error:</strong> Invalid Configuration - Missing "table" definition.');
         global $wpdb;
         if(empty($this->form_columns))
             $this->form_columns = $this->columns;
         if(empty($this->row))
             $this->get_row();
         if(empty($this->row))
-            return $this->message("<strong>Error:</strong> $this->item not found.");
+            return $this->error("<strong>Error:</strong> $this->item not found.");
 ?>
 <div class="wrap">
     <div id="icon-edit-pages" class="icon32"<?php if($this->icon!==false){ ?> style="background-position:0 0;background-image:url(<?php echo $this->icon; ?>);"<?php } ?>><br /></div>
@@ -363,14 +472,19 @@ class Search_Engine_Admin
 <?php
         // available options
         // type = date (data validation as datetime)
+            // update = if type=date then use current timestamp when saving (even if readonly)
         // type = text / other (single line text box)
         // type = desc (textarea)
         // type = number (data validation as int float)
         // type = decimal (data validation as decimal)
         // type = password (single line password box)
         // type = bool (single line password box)
+        // type = related (select box)
+            // related = table to relate to (if type=related)
+            // related_field = field name on table to show (if type=related) - default "name"
+            // related_multiple = true (ability to select multiple values if type=related)
+            // related_sql = custom where / order by SQL (if type=related)
         // readonly = true (shows as text)
-        // update = if type=date then use current timestamp when saving (even if readonly)
         // display = false (doesn't show on form, but can be saved)
         foreach($this->form_columns as $column=>$attributes)
         {
@@ -385,6 +499,14 @@ class Search_Engine_Admin
                 $this->row[$column] = '';
             if($attributes['type']=='bool')
                 $selected = ($this->row[$column]==1?' CHECKED':'');
+            if(!isset($attributes['related']))
+                $attributes['related'] = false;
+            if(!isset($attributes['related_field']))
+                $attributes['related_field'] = 'name';
+            if(!isset($attributes['related_multiple']))
+                $attributes['related_multiple'] = false;
+            if(!isset($attributes['related_sql']))
+                $attributes['related_sql'] = false;
             if(!isset($attributes['readonly']))
                 $attributes['readonly'] = false;
             if(!isset($attributes['update']))
@@ -421,6 +543,25 @@ class Search_Engine_Admin
             {
                 $this->row[$column] = ($this->row[$column]==1?'Yes':'No');
             }
+            elseif($attributes['type']=='related')
+            {
+                $old_value = $this->row[$column];
+                $this->row[$column] = '';
+                if(!empty($old_value))
+                {
+                    $this->row[$column] = array();
+                    $related = $wpdb->get_results('SELECT id,`'.$attributes['related_field'].'` FROM '.$attributes['related'].' WHERE id IN ('.$old_value.')'.(!empty($attributes['related_sql'])?' '.$attributes['related_sql']:''));
+                    foreach($related as $option)
+                    {
+                        $this->row[$column][] = $option->$attributes['related_field'];
+                    }
+                    $this->row[$column] = '<ul><li>'.implode('</li><li>',$this->row[$column]).'</li></ul>';
+                }
+                else
+                {
+                    $this->row[$column] = 'N/A';
+                }
+            }
 ?>
             <div id="admin_ui_<?php echo $column; ?>"><?php echo $this->row[$column]; ?></div>
 <?php
@@ -442,20 +583,22 @@ class Search_Engine_Admin
     }
     function delete ()
     {
+        $this = apply_filters('wp_ui_admin_delete',$this);
         if(isset($this->custom['delete'])&&function_exists("{$this->custom['delete']}"))
             return $this->custom['delete']($this);
-        if($this->table===false)
-            return $this->message('<strong>Error:</strong> Invalid Configuration - Missing "table" definition.');
+        if($this->table===false&&$this->sql===false)
+            return $this->error('<strong>Error:</strong> Invalid Configuration - Missing "table" definition.');
         global $wpdb;
         $check = $wpdb->query($wpdb->prepare("DELETE FROM $this->table WHERE `id`=%d",array($this->id)));
         if($check)
             $this->message("<strong>Deleted:</strong> $this->item has been deleted.");
         else
-            $this->message("<strong>Error:</strong> $this->item has not been deleted.");
+            $this->error("<strong>Error:</strong> $this->item has not been deleted.");
         $this->manage();
     }
     function save ($create=0)
     {
+        $this = apply_filters('wp_ui_admin_save',$this,$create);
         if(isset($this->custom['save'])&&function_exists("{$this->custom['save']}"))
             return $this->custom['save']($this);
         global $wpdb;
@@ -473,6 +616,7 @@ class Search_Engine_Admin
         // type = bool (single line password box)
         // readonly = true (shows as text)
         // update = if type=date then use current timestamp when saving (even if readonly)
+        // update_on_create = if type=date then use current timestamp when saving (only on creation, even if readonly)
         // display = false (doesn't show on form, but can be saved)
         $column_sql = array();
         $values = array();
@@ -501,10 +645,12 @@ class Search_Engine_Admin
 
             if($attributes['type']=='date')
             {
-                if($attributes['update'])
+                if($attributes['update']||($attributes['update_on_create']&&$create==1&&$this->id<1))
                     $value = date("Y-m-d H:i:s");
-                else
+                elseif(false===$attributes['readonly'])
                     $value = date("Y-m-d H:i:s",strtotime($_POST[$column]));
+                else
+                    continue;
             }
             else
             {
@@ -525,27 +671,30 @@ class Search_Engine_Admin
                     $vartype = '%d';
                     $value = number_format($_POST[$column],2,'.','');
                 }
+                elseif($attributes['type']=='related')
+                {
+                    if(is_array($_POST[$column]))
+                        $value = implode(',',$_POST[$column]);
+                    else
+                        $value = $_POST[$column];
+                }
                 else
                     $value = $_POST[$column];
             }
             if(isset($attributes['custom_save'])&&function_exists("{$attributes['custom_save']}"))
-            {
                 $value = $attributes['custom_save']($value,$column,$attributes,$this);
-            }
             $column_sql[] = "`$column`=$vartype";
             $values[] = $value;
         }
         $column_sql = implode(',',$column_sql);
-        if($create==0)
+        if($create==0&&$this->id>0)
         {
             $this->insert_id = $this->id;
             $values[] = $this->id;
             $check = $wpdb->query($wpdb->prepare("UPDATE $this->table SET $column_sql WHERE id=%d",$values));
         }
         else
-        {
             $check = $wpdb->query($wpdb->prepare("INSERT INTO $this->table SET $column_sql",$values));
-        }
         if($check)
         {
             if($this->insert_id==0)
@@ -553,76 +702,291 @@ class Search_Engine_Admin
             $this->message('<strong>Success!</strong> '.$this->item.' '.$action.' successfully.');
         }
         else
-            $this->message('<strong>Error</strong> '.$this->item.' has not been '.$action.'.');
+            $this->error('<strong>Error</strong> '.$this->item.' has not been '.$action.'.');
+    }
+    function export ()
+    {
+        $this = apply_filters('wp_ui_admin_export',$this);
+        require_once(ABSPATH . 'wp-admin/includes/file.php');
+        $url = explode('/',$_SERVER['REQUEST_URI']);
+        $url = array_reverse($url);
+        $url = $url[0];
+        if ( false === ($credentials = request_filesystem_credentials($url, '', false, ABSPATH)) )
+        {
+            $this->error("<strong>Error:</strong> Your hosting configuration does not allow access to add files to your site.");
+            return false;
+        }
+        if ( ! WP_Filesystem($credentials, ABSPATH) ) {
+            request_filesystem_credentials($url, '', true, ABSPATH); //Failed to connect, Error and request again
+            $this->error("<strong>Error:</strong> Your hosting configuration does not allow access to add files to your site.");
+            return false;
+        }
+        global $wp_filesystem;
+        if(isset($this->custom['export'])&&function_exists("{$this->custom['export']}"))
+            return $this->custom['export']($this);
+        if(empty($this->full_data))
+            $this->get_data(true);
+        $dir = dirname($this->export_dir);
+        if(!file_exists($this->export_dir))
+        {
+            if(!$wp_filesystem->is_writable($dir)||!($dir = $wp_filesystem->mkdir($this->export_dir)))
+            {
+                $this->error("<strong>Error:</strong> Your export directory (<strong>$this->export_dir</strong>) did not exist and couldn&#8217;t be created by the web server. Check the directory permissions and try again.");
+                return false;
+            }
+        }
+        if(!$wp_filesystem->is_writable($this->export_dir))
+        {
+            $this->error("<strong>Error:</strong> Your export directory (<strong>$this->export_dir</strong>) needs to be writable for this plugin to work. Double-check it and try again.");
+            return false;
+        }
+        if(isset($_GET['remove_export']))
+        {
+            if($wp_filesystem->exists($this->export_dir.'/'.str_replace('/','',$_GET['remove_export'])))
+            {
+                $remove = @unlink($this->export_dir.'/'.str_replace('/','',$_GET['remove_export']));
+                if($remove)
+                {
+                    $this->message('<strong>Success:</strong> Export removed successfully.');
+                    return;
+                }
+                else
+                {
+                    $this->error("<strong>Error:</strong> Your export directory (<strong>$this->export_dir</strong>) needs to be writable for this plugin to work. Double-check it and try again.");
+                    return false;
+                }
+            }
+            else
+            {
+                $this->error("<strong>Error:</strong> That file does not exist in the export directory.");
+                return false;
+            }
+        }
+        else
+        {
+            if($this->export_type=='csv')
+            {
+                $export_file = str_replace('-','_',sanitize_title($this->items)).'_'.date('m-d-Y_h-i-sa').'.csv';
+                $fp = fopen($this->export_dir.'/'.$export_file,'a+');
+                $head = '';
+                foreach($this->columns as $key=>$column)
+                    $head .= '"'.$column['label'].'",';
+                $head = substr($head,0,-1);
+                fwrite($fp,"$head\r\n");
+                foreach($this->full_data as $item)
+                {
+                    $line = '';
+                    foreach($this->columns as $key=>$column)
+                        $line .= '"'.$item[$key].'",';
+                    $line = substr($line,0,-1);
+                    fwrite($fp,"$line\r\n");
+                }
+                fclose($fp);
+                $this->message('<strong>Success:</strong> Your export is ready, the download should begin in a few moments. If it doesn\'t, <a href="'.$this->export_url.urlencode($export_file).'" target="_blank">click here to access your CSV export file</a>.<br /><br />When you are done with your export, <a href="'.$this->var_update(array('remove_export'=>urlencode($export_file),'action'=>'export')).'">click here to remove it</a>, otherwise the export will be deleted within 24 hours of generation.');
+                echo '<script type="text/javascript">window.open("'.$this->export_url.urlencode($export_file).'");</script>';
+            }
+            elseif($this->export_type=='tab')
+            {
+                $export_file = str_replace('-','_',sanitize_title($this->items)).'_'.date('m-d-Y_h-i-sa').'.tab';
+                $fp = fopen($this->export_dir.'/'.$export_file,'a+');
+                $head = '';
+                foreach($this->columns as $key=>$column)
+                    $head .= '"'.$column['label'].'"'."\t";
+                $head = substr($head,0,-1);
+                fwrite($fp,"$head\r\n");
+                foreach($this->full_data as $item)
+                {
+                    $line = '';
+                    foreach($this->columns as $key=>$column)
+                        $line .= '"'.$item[$key].'"'."\t";
+                    $line = substr($line,0,-1);
+                    fwrite($fp,"$line\r\n");
+                }
+                fclose($fp);
+                $this->message('<strong>Success:</strong> Your export is ready, the download should begin in a few moments. If it doesn\'t, <a href="'.$this->export_url.urlencode($export_file).'" target="_blank">click here to access your TAB export file</a>.<br /><br />When you are done with your export, <a href="'.$this->var_update(array('remove_export'=>urlencode($export_file),'action'=>'export')).'">click here to remove it</a>, otherwise the export will be deleted within 24 hours of generation.');
+                echo '<script type="text/javascript">window.open("'.$this->export_url.urlencode($export_file).'");</script>';
+            }
+            elseif($this->export_type=='xml')
+            {
+                $export_file = str_replace('-','_',sanitize_title($this->items)).'_'.date('m-d-Y_h-i-sa').'.xml';
+                $fp = fopen($this->export_dir.'/'.$export_file,'a+');
+                $head = '<'.'?'.'xml version="1.0" encoding="utf-8" '.'?'.'>'."\r\n<items count=\"".count($this->full_data)."\">\r\n";
+                $head = substr($head,0,-1);
+                fwrite($fp,$head);
+                foreach($this->full_data as $item)
+                {
+                    $line = "\t<item>\r\n";
+                    foreach($this->columns as $key=>$column)
+                        $line .= "\t\t<{$key}><![CDATA[".$item[$key]."]]></{$key}>\r\n";
+                    $line .= "\t</item>\r\n";
+                    fwrite($fp,$line);
+                }
+                $foot = '</items>' ;
+                fwrite($fp,$foot);
+                fclose($fp);
+                $this->message('<strong>Success:</strong> Your export is ready, the download should begin in a few moments. If it doesn\'t, <a href="'.$this->export_url.urlencode($export_file).'" target="_blank">click here to download your XML export file</a>.<br /><br />When you are done with your export, <a href="'.$this->var_update(array('remove_export'=>urlencode($export_file),'action'=>'export')).'">click here to remove it</a>, otherwise the export will be deleted within 24 hours of generation.');
+                echo '<script type="text/javascript">window.open("'.$this->export_url.urlencode($export_file).'");</script>';
+            }
+            elseif($this->export_type=='json')
+            {
+                $export_file = str_replace('-','_',sanitize_title($this->items)).'_'.date('m-d-Y_h-i-sa').'.json';
+                $fp = fopen($this->export_dir.'/'.$export_file,'a+');
+                $data = array('items'=>array('count'=>count($this->full_data),'item'=>array()));
+                foreach($this->full_data as $item)
+                {
+                    $row = array();
+                    foreach($this->columns as $key=>$column)
+                        $row[$key] = $item[$key];
+                    $data['items']['item'][] = $row;
+                }
+                fwrite($fp,json_encode($data));
+                fclose($fp);
+                $this->message('<strong>Success:</strong> Your export is ready, the download should begin in a few moments. If it doesn\'t, <a href="'.$this->export_url.urlencode($export_file).'" target="_blank">click here to access your JSON export file</a>.<br /><br />When you are done with your export, <a href="'.$this->var_update(array('remove_export'=>urlencode($export_file),'action'=>'export')).'">click here to remove it</a>, otherwise the export will be deleted within 24 hours of generation.');
+                echo '<script type="text/javascript">window.open("'.$this->export_url.urlencode($export_file).'");</script>';
+            }
+            else
+            {
+                $this->error("<strong>Error:</strong> Invalid export type.");
+                return false;
+            }
+        }
+        do_action('wp_ui_admin_export',$this,$export_file);
     }
     function get_row ()
     {
         if(isset($this->custom['row'])&&function_exists("{$this->custom['row']}"))
             return $this->custom['row']($this);
-        if($this->table===false)
-            return $this->message('<strong>Error:</strong> Invalid Configuration - Missing "table" definition.');
+        if($this->table===false&&$this->sql===false)
+            return $this->error('<strong>Error:</strong> Invalid Configuration - Missing "table" definition.');
         if($this->id===false)
-            return $this->message('<strong>Error:</strong> Invalid Configuration - Missing "id" definition.');
+            return $this->error('<strong>Error:</strong> Invalid Configuration - Missing "id" definition.');
         global $wpdb;
         $sql = "SELECT * FROM $this->table WHERE `id`=".$wpdb->_real_escape($this->id);
         $row = @current($wpdb->get_results($sql,ARRAY_A));
+        $row = apply_filters('wp_ui_admin_get_row',$row,$this);
         if(!empty($row))
             $this->row = $row;
     }
-    function get_data ()
+    function get_data ($full=false)
     {
         if(isset($this->custom['data'])&&function_exists("{$this->custom['data']}"))
             return $this->custom['data']($this);
-        if($this->table===false)
-            return $this->message('<strong>Error:</strong> Invalid Configuration - Missing "table" definition.');
+        if($this->table===false&&$this->sql===false)
+            return $this->error('<strong>Error:</strong> Invalid Configuration - Missing "table" definition.');
         global $wpdb;
-        $sql = "SELECT SQL_CALC_FOUND_ROWS * FROM $this->table";
-        if(false!==$this->search)
+        if(false===$this->sql)
         {
-            $sql .= " WHERE ";
-            if(empty($this->search_columns))
-                $this->search_columns = $this->columns;
-            $and = false;
-            foreach($this->search_columns as $key=>$column)
+            $sql = "SELECT SQL_CALC_FOUND_ROWS * FROM $this->table";
+            if(false!==$this->search&&false!==$this->search_query)
             {
-                if(is_array($column)&&isset($column['type'])&&$column['type']=='date')
-                    continue;
-                if($and)
-                    $sql .= " OR ";
-                else
-                    $and = true;
-                if(is_array($column))
-                    $column = $key;
-                $sql .= "`$column` LIKE '%".$wpdb->_real_escape($this->search)."%'";
+                $sql .= " WHERE ";
+                if(empty($this->search_columns))
+                    $this->search_columns = $this->columns;
+                $and = false;
+                foreach($this->search_columns as $key=>$column)
+                {
+                    if(is_array($column)&&isset($column['type'])&&$column['type']=='date')
+                        continue;
+                    if($and)
+                        $sql .= " OR ";
+                    else
+                        $and = true;
+                    if(is_array($column))
+                        $column = $key;
+                    $sql .= "`$column` LIKE '%".$wpdb->_real_escape($this->search_query)."%'";
+                }
+            }
+            $sql .= ' ORDER BY ';
+            if(isset($this->columns[$this->order])||in_array($this->order,$this->columns))
+                $sql .= $this->order.' '.$this->order_dir;
+            else
+                $sql .= 'id';
+            if(false!==$this->pagination&&!$full)
+            {
+                $start = ($this->page-1)*$this->limit;
+                $end = ($this->page-1)*$this->limit+$this->limit;
+                $sql .= " LIMIT $start,$end";
             }
         }
-        $sql .= ' ORDER BY ';
-        if(isset($this->columns[$this->order])||in_array($this->order,$this->columns))
-            $sql .= $this->order.' '.$this->order_dir;
         else
-            $sql .= 'id';
-        $start = ($this->page-1)*$this->limit;
-        $end = ($this->page-1)*$this->limit+$this->limit;
-        $sql .= " LIMIT $start,$end";
-        $this->data = $wpdb->get_results($sql,ARRAY_A);
+        {
+            $sql = str_replace('SELECT ','SELECT SQL_CALC_FOUND_ROWS ',str_replace('SELECT SQL_CALC_FOUND_ROWS ','SELECT ',$this->sql));
+            if(false!==$this->search&&false!==$this->search_query)
+            {
+                if(empty($this->search_columns))
+                    $this->search_columns = $this->columns;
+                $and = false;
+                if(!empty($this->columns))
+                {
+                    $sql .= " WHERE ";
+                    foreach($this->search_columns as $key=>$column)
+                    {
+                        if(is_array($column)&&isset($column['type'])&&$column['type']=='date')
+                            continue;
+                        if($and)
+                            $sql .= " OR ";
+                        else
+                            $and = true;
+                        if(is_array($column))
+                            $column = $key;
+                        $sql .= "`$column` LIKE '%".$wpdb->_real_escape($this->search_query)."%'";
+                    }
+                }
+            }
+            if(false!==$this->pagination&&!$full)
+            {
+                $start = ($this->page-1)*$this->limit;
+                $end = ($this->page-1)*$this->limit+$this->limit;
+                $sql .= " LIMIT $start,$end";
+            }
+        }
+        $results = $wpdb->get_results($sql,ARRAY_A);
+        $results = apply_filters('wp_ui_admin_get_data',$results,$this);
+        if($full)
+            $this->full_data = $results;
+        else
+            $this->data = $results;
+        if($full)
+        {
+            if(empty($this->columns)&&!empty($this->full_data))
+            {
+                $data = current($this->full_data);
+                foreach($data as $data_key=>$data_value)
+                    $this->columns[$data_key] = array('label'=>ucwords(str_replace('-',' ',str_replace('_',' ',$data_key))));
+            }
+            return;
+        }
+        else
+        {
+            if(empty($this->columns)&&!empty($this->data))
+            {
+                $data = current($this->data);
+                foreach($data as $data_key=>$data_value)
+                    $this->columns[$data_key] = array('label'=>ucwords(str_replace('-',' ',str_replace('_',' ',$data_key))));
+            }
+        }
         $total = @current($wpdb->get_col("SELECT FOUND_ROWS()"));
+        $total = apply_filters('wp_ui_admin_get_data_total',$total,$this);
         if(is_numeric($total))
             $this->total = $total;
     }
     function manage ()
     {
+        $this = apply_filters('wp_ui_admin_manage',$this);
         if(isset($this->custom['manage'])&&function_exists("{$this->custom['manage']}"))
             return $this->custom['manage']($this);
 ?>
 <div class="wrap">
     <div id="icon-edit-pages" class="icon32"<?php if($this->icon!==false){ ?> style="background-position:0 0;background-image:url(<?php echo $this->icon; ?>);"<?php } ?>><br /></div>
-    <h2>Manage <?php echo $this->items; ?></h2>
+    <h2><?php echo $this->heading['manage']; ?> <?php echo $this->items; ?></h2>
 <?php
         if(isset($this->custom['header'])&&function_exists("{$this->custom['header']}"))
             echo $this->custom['header']($this);
         if(empty($this->data))
             $this->get_data();
-        if(!empty($this->data)||!empty($this->search))
+        if(false!==$this->export&&$this->action=='export')
+            $this->export();
+        if(!empty($this->data)&&false!==$this->search)
         {
 ?>
     <form id="posts-filter" action="" method="get">
@@ -630,14 +994,14 @@ class Search_Engine_Admin
 <?php $this->hidden_vars(); ?>
             <label class="screen-reader-text" for="page-search-input">Search:</label>
 <?php
-            if(false!==$this->search)
+            if(false!==$this->search_query)
             {
 ?>
-            <small>[<a href="<?php echo $this->var_update(array('search'=>''),array('order','order_dir','limit')); ?>">Reset Filters</a>]</small>
+            <small>[<a href="<?php echo $this->var_update(array('search_query'=>''),array('order','order_dir','limit')); ?>">Reset Filters</a>]</small>
 <?php
             }
 ?>
-            <input type="text" name="search" id="page-search-input" value="<?php echo $this->search; ?>" />
+            <input type="text" name="search_query" id="page-search-input" value="<?php echo $this->search_query; ?>" />
             <input type="submit" value="Search" class="button" />
         </p>
     </form>
@@ -653,7 +1017,7 @@ class Search_Engine_Admin
 ?>
     <div class="tablenav">
 <?php
-        if(!empty($this->data))
+        if(!empty($this->data)&&false!==$this->pagination)
         {
 ?>
         <div class="tablenav-pages">
@@ -662,11 +1026,28 @@ class Search_Engine_Admin
         </div>
 <?php
         }
-        if($this->add)
+        if($this->add||$this->export)
         {
 ?>
         <div class="alignleft actions">
+<?php
+            if($this->add)
+            {
+?>
             <input type="button" value="Add New <?php echo $this->item; ?>" class="button" onclick="document.location='<?php echo $this->var_update(array('action'=>'add')); ?>'" />
+<?php
+            }
+            if($this->export)
+            {
+?>
+            <strong>Export:</strong>
+            <input type="button" value=" CSV " class="button" onclick="document.location='<?php echo $this->var_update(array('action'=>'export','export_type'=>'csv')); ?>'" />
+            <input type="button" value=" TAB " class="button" onclick="document.location='<?php echo $this->var_update(array('action'=>'export','export_type'=>'tab')); ?>'" />
+            <input type="button" value=" XML " class="button" onclick="document.location='<?php echo $this->var_update(array('action'=>'export','export_type'=>'xml')); ?>'" />
+            <input type="button" value=" JSON " class="button" onclick="document.location='<?php echo $this->var_update(array('action'=>'export','export_type'=>'json')); ?>'" />
+<?php
+            }
+?>
         </div>
 <?php
         }
@@ -693,6 +1074,7 @@ class Search_Engine_Admin
     }
     function table ()
     {
+        $this = apply_filters('wp_ui_admin_table',$this);
         if(isset($this->custom['table'])&&function_exists("{$this->custom['table']}"))
             return $this->custom['table']($this);
         if(empty($this->data))
@@ -867,6 +1249,7 @@ jQuery('table.widefat tbody tr:even').addClass('alternate');
     }
     function pagination ()
     {
+        $this = apply_filters('wp_ui_admin_pagination',$this);
         if(isset($this->custom['pagination'])&&function_exists("{$this->custom['pagination']}"))
             return $this->custom['pagination']($this);
         $page = $this->page;
@@ -941,6 +1324,7 @@ jQuery('table.widefat tbody tr:even').addClass('alternate');
     }
     function limit ($options=false)
     {
+        $this = apply_filters('wp_ui_admin_limit',$this,$options);
         if(isset($this->custom['limit'])&&function_exists("{$this->custom['limit']}"))
             return $this->custom['limit']($this);
         if($options===false||!is_array($options)||empty($options))
