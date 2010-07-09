@@ -341,7 +341,7 @@ function search_engine_wizard_run ()
         $form_columns[] = 'whitelist_uri_words';
         $form_columns[] = 'htaccess_username';
         $form_columns[] = 'htaccess_password';
-        $admin = new Search_Engine_Admin(array('do'=>'create','item'=>'Index Template','items'=>'Index Templates','table'=>SEARCH_ENGINE_TBL.'templates','columns'=>$columns,'form_columns'=>$form_columns,'icon'=>SEARCH_ENGINE_URL.'/assets/icons/search_32.png','custom'=>array('form'=>'search_engine_index_form','action_end_view'=>'search_engine_index_run','header'=>'search_engine_index_header')));
+        $admin = new WP_Admin_UI(array('do'=>'create','item'=>'Index Template','items'=>'Index Templates','table'=>SEARCH_ENGINE_TBL.'templates','columns'=>$columns,'form_columns'=>$form_columns,'icon'=>SEARCH_ENGINE_URL.'/assets/icons/search_32.png','custom'=>array('form'=>'search_engine_index_form','action_end_view'=>'search_engine_index_run','header'=>'search_engine_index_header')));
         $admin->go();
         $template_id = $admin->insert_id;
     }
@@ -421,7 +421,7 @@ function search_engine_index_templates ()
     $form_columns[] = 'whitelist_uri_words';
     $form_columns[] = 'htaccess_username';
     $form_columns[] = 'htaccess_password';
-    $admin = new Search_Engine_Admin(array('item'=>'Index Template','items'=>'Index Templates','table'=>SEARCH_ENGINE_TBL.'templates','columns'=>$columns,'form_columns'=>$form_columns,'icon'=>SEARCH_ENGINE_URL.'/assets/icons/search_32.png','custom'=>array('form'=>'search_engine_index_form','action_end_view'=>'search_engine_index_run','header'=>'search_engine_index_header')));
+    $admin = new WP_Admin_UI(array('item'=>'Index Template','items'=>'Index Templates','table'=>SEARCH_ENGINE_TBL.'templates','columns'=>$columns,'form_columns'=>$form_columns,'icon'=>SEARCH_ENGINE_URL.'/assets/icons/search_32.png','custom'=>array('form'=>'search_engine_index_form','action_end_view'=>'search_engine_index_run','header'=>'search_engine_index_header')));
     $admin->go();
 ?>
 <?php
@@ -600,7 +600,7 @@ function search_engine_groups ()
     $form_columns['created']['display'] = false;
     $form_columns['updated']['update'] = true;
     $form_columns['updated']['display'] = false;
-    $admin = new Search_Engine_Admin(array('item'=>'Group','items'=>'Groups','table'=>SEARCH_ENGINE_TBL.'groups','columns'=>$columns,'form_columns'=>$form_columns,'icon'=>SEARCH_ENGINE_URL.'/assets/icons/search_32.png'));
+    $admin = new WP_Admin_UI(array('item'=>'Group','items'=>'Groups','table'=>SEARCH_ENGINE_TBL.'groups','columns'=>$columns,'form_columns'=>$form_columns,'icon'=>SEARCH_ENGINE_URL.'/assets/icons/search_32.png'));
     $admin->go();
 }
 function search_engine_groups_form ($obj)
@@ -616,7 +616,7 @@ function search_engine_view_index ()
     $form_columns[] = 'scheme';
     $form_columns['updated']['update'] = true;
     $form_columns['updated']['display'] = false;
-    $admin = new Search_Engine_Admin(array('item'=>'Index','items'=>'Index','table'=>SEARCH_ENGINE_TBL.'sites','columns'=>$columns,'form_columns'=>$form_columns,'icon'=>SEARCH_ENGINE_URL.'/assets/icons/search_32.png','custom'=>array('action_end_view'=>'search_engine_view_index_run','view'=>'search_engine_view_index_details'),'edit'=>false,'add'=>false,'view'=>true));
+    $admin = new WP_Admin_UI(array('item'=>'Index','items'=>'Index','table'=>SEARCH_ENGINE_TBL.'sites','columns'=>$columns,'form_columns'=>$form_columns,'icon'=>SEARCH_ENGINE_URL.'/assets/icons/search_32.png','custom'=>array('action_end_view'=>'search_engine_view_index_run','view'=>'search_engine_view_index_details'),'edit'=>false,'add'=>false,'view'=>true));
     $admin->go();
 }
 function search_engine_view_index_details ($obj)
@@ -636,7 +636,7 @@ function search_engine_view_index_run ($obj,$row)
 function search_engine_logs ()
 {
     require_once SEARCH_ENGINE_DIR.'/classes/Admin.class.php';
-    $admin = new Search_Engine_Admin(array('item'=>'Search Log','items'=>'Search Logs','table'=>SEARCH_ENGINE_TBL.'log','columns'=>array('query','time'=>array('type'=>'date','label'=>'Date of Search'),'elapsed'=>array('label'=>'Processing Time'),'results'=>array('label'=>'Total Results Found')),'add'=>false,'edit'=>false,'delete'=>false,'icon'=>SEARCH_ENGINE_URL.'/assets/icons/search_32.png'));
+    $admin = new WP_Admin_UI(array('item'=>'Search Log','items'=>'Search Logs','table'=>SEARCH_ENGINE_TBL.'log','columns'=>array('query','time'=>array('type'=>'date','label'=>'Date of Search'),'elapsed'=>array('label'=>'Processing Time'),'results'=>array('label'=>'Total Results Found')),'add'=>false,'edit'=>false,'delete'=>false,'icon'=>SEARCH_ENGINE_URL.'/assets/icons/search_32.png'));
     $admin->go();
 }
 function search_engine_settings ()
@@ -685,7 +685,7 @@ function search_engine_search_settings ()
     {
         $delete = false;
     }
-    $admin = new Search_Engine_Admin(array('item'=>'Search Setting','items'=>'Search Settings','table'=>SEARCH_ENGINE_TBL.'search','columns'=>$columns,'form_columns'=>$form_columns,'delete'=>$delete,'icon'=>SEARCH_ENGINE_URL.'/assets/icons/search_32.png'));
+    $admin = new WP_Admin_UI(array('item'=>'Search Setting','items'=>'Search Settings','table'=>SEARCH_ENGINE_TBL.'search','columns'=>$columns,'form_columns'=>$form_columns,'delete'=>$delete,'icon'=>SEARCH_ENGINE_URL.'/assets/icons/search_32.png'));
     $admin->go();
 }
 function search_engine_about ()

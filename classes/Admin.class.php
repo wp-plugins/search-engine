@@ -16,7 +16,7 @@ if(!is_object($wpdb))
 // FOR EXPORTS ONLY
 if(isset($_GET['download'])&&!isset($_GET['page'])&&is_user_logged_in())
 {
-    do_action('wp_ui_admin_export_download');
+    do_action('wp_admin_ui_export_download');
     $file = WP_CONTENT_DIR.'/exports/'.str_replace('/','',$_GET['export']);
     if(!isset($_GET['export'])||empty($_GET['export'])||!file_exists($file))
     {
@@ -49,13 +49,13 @@ if(isset($_GET['download'])&&!isset($_GET['page'])&&is_user_logged_in())
  *
  * @package Admin UI for Plugins
  *
- * @version 1.2.0
+ * @version 1.3.0
  * @author Scott Kingsley Clark
  * @link http://www.scottkclark.com/
  *
  * @param mixed $options
  */
-class WP_UI_Admin
+class WP_Admin_UI
 {
     // base
     var $item = 'Item';
@@ -102,14 +102,12 @@ class WP_UI_Admin
     var $order_dir = 'DESC';
     var $sql = false;
 
-    // export options
-    var $export_dir = WP_CONTENT_DIR.'/exports';
-    var $export_url = WP_CONTENT_URL.(str_replace(WP_CONTENT_DIR,'',__FILE__)).'?download=1&export=';
-
     function __construct ($options=false)
     {
-        do_action('wp_ui_admin_init');
-        $options = apply_filters('wp_ui_admin_options',$options);
+        do_action('wp_admin_ui_pre_init',$options);
+        $options = $this->do_hook('options',$options);
+        $this->export_dir = WP_CONTENT_DIR.'/exports';
+        $this->export_url = WP_CONTENT_URL.(str_replace(WP_CONTENT_DIR,'',__FILE__)).'?download=1&export=';
         if(false!==$this->get_var('id'))
             $this->id = $_GET['id'];
         if(false!==$this->get_var('action',false,array('add','edit','view','delete','manage','export')))
@@ -137,7 +135,8 @@ class WP_UI_Admin
         }
         if(false!==$this->readonly)
             $this->add = $this->edit = $this->delete = $this->save = false;
-        $this = apply_filters('wp_ui_admin',$this,$options);
+        $this->columns = $this->setup_columns();
+        $this->do_hook('post_init',$options);
     }
     function get_var ($index,$default=false,$allowed=false,$array=false)
     {
@@ -151,19 +150,45 @@ class WP_UI_Admin
         if(false!==$allowed&&!is_array($allowed))
             $allowed = array($allowed);
         $value = $default;
-        if(isset($array[$index])&&$allowed===false)
+        if(isset($array[$index])&&(false===$allowed||in_array($array[$index],$allowed)))
             $value = $array[$index];
-        return apply_filters('wp_ui_admin_get_var',$value,array('index'=>$index,'default'=>$default,'allowed'=>$allowed,'array'=>$array),$this);
+        return $this->do_hook('get_var',$value,$index,$default,$allowed,$array);
     }
     function hidden_vars ()
     {
-        $this = apply_filters('wp_ui_admin_hidden_vars',$this);
+        $this->do_hook('hidden_vars');
         foreach($_GET as $k=>$v)
         {
 ?>
 <input type="hidden" name="<?php echo $k; ?>" value="<?php echo $v; ?>" />
 <?php
         }
+    }
+    /*
+    // Example code for use with $this->do_hook
+    function my_filter_function ($args,$obj)
+    {
+        $obj[0]->item = 'Post';
+        $obj[0]->add = true;
+        // args are an array (0=>$arg1,1=>$arg2)
+        // may have more than one arg, dependant on filter
+        return $args;
+    }
+    add_filter('wp_admin_ui_post_init','my_filter_function',10,2);
+    // OR
+    add_action('wp_admin_ui_post_init','my_filter_function',10,2);
+    */
+    function do_hook ()
+    {
+        $args = func_get_args();
+        if(empty($args))
+            return false;
+        $filter = $args[0];
+        unset($args[0]);
+        $args = apply_filters('wp_admin_ui_'.$filter,$args,array(&$this,'wp_admin_ui_'.$filter));
+        if(isset($args[1]))
+            return $args[1];
+        return false;
     }
     function var_update($array=false,$allowed=false,$url=false)
     {
@@ -187,7 +212,7 @@ class WP_UI_Admin
                     unset($get[$key]);
             }
         }
-        if($url===false)
+        if(false===$url)
             $url = '';
         else
         {
@@ -195,26 +220,180 @@ class WP_UI_Admin
             $url = explode('#',$url[0]);
             $url = $url[0];
         }
-        return apply_filters('wp_ui_admin_var_update',$url.'?'.http_build_query($get),$this);
+        return $this->do_hook('var_update',$url.'?'.http_build_query($get));
+    }
+    function sanitize ($input)
+    {
+        global $wpdb;
+        $output = array();
+        if(is_object($input))
+        {
+            $input = (array) $input;
+            foreach($input as $key => $val)
+            {
+                $output[$key] = $this->sanitize($val);
+            }
+            $output = (object) $output;
+        }
+        elseif(is_array($input))
+        {
+            foreach($input as $key => $val)
+            {
+                $output[$key] = $this->sanitize($val);
+            }
+        }
+        elseif(empty($input))
+        {
+            $output = $input;
+        }
+        else
+        {
+            $output = $wpdb->_real_escape(trim($input));
+        }
+        return $output;
+    }
+    function unsanitize ($input)
+    {
+        $output = array();
+        if(is_object($input))
+        {
+            $input = (array) $input;
+            foreach($input as $key => $val)
+            {
+                $output[$key] = $this->unsanitize($val);
+            }
+            $output = (object) $output;
+        }
+        elseif(is_array($input))
+        {
+            foreach($input as $key => $val)
+            {
+                $output[$key] = $this->unsanitize($val);
+            }
+        }
+        elseif(empty($input))
+        {
+            $output = $input;
+        }
+        else
+        {
+            $output = stripslashes($input);
+        }
+        return $output;
+    }
+    function setup_columns ($columns=null)
+    {
+        $init = false;
+        if(null===$columns)
+        {
+            $columns = $this->columns;
+            $init = true;
+        }
+        if(!empty($columns))
+        {
+            // Available Attributes
+            // type = field type
+                // type = date (data validation as datetime)
+                    // date_touch = use current timestamp when saving (even if readonly, if type=date)
+                    // date_touch_on_create = use current timestamp when saving ONLY on create (even if readonly, if type=date)
+                // type = text / other (single line text box)
+                // type = desc (textarea)
+                // type = number (data validation as int float)
+                // type = decimal (data validation as decimal)
+                // type = password (single line password box)
+                // type = bool (single line password box)
+                // type = related (select box)
+                    // related = table to relate to (if type=related)
+                    // related_field = field name on table to show (if type=related) - default "name"
+                    // related_multiple = true (ability to select multiple values if type=related)
+                    // related_sql = custom where / order by SQL (if type=related)
+            // readonly = true (shows as text)
+            // display = false (doesn't show on form, but can be saved)
+            // comments = comments to show for field
+            // comments_top = true (shows comments above field instead of below)
+            $new_columns = array();
+            foreach($columns as $column=>$attributes)
+            {
+                if(!is_array($attributes))
+                {
+                    $column = $attributes;
+                    $attributes = array();
+                }
+                if(!isset($attributes['label']))
+                    $attributes['label'] = ucwords(str_replace('_',' ',$column));
+                if(!isset($attributes['type']))
+                    $attributes['type'] = 'text';
+                if(!isset($attributes['related']))
+                    $attributes['related'] = false;
+                if(!isset($attributes['related_field']))
+                    $attributes['related_field'] = 'name';
+                if(!isset($attributes['related_multiple']))
+                    $attributes['related_multiple'] = false;
+                if(!isset($attributes['related_sql']))
+                    $attributes['related_sql'] = false;
+                if(!isset($attributes['readonly']))
+                    $attributes['readonly'] = false;
+                if(!isset($attributes['date_touch'])||$attributes['type']!='date')
+                    $attributes['date_touch'] = false;
+                if(!isset($attributes['date_touch_on_create'])||$attributes['type']!='date')
+                    $attributes['date_touch_on_create'] = false;
+                if(!isset($attributes['display']))
+                    $attributes['display'] = true;
+                if(!isset($attributes['export']))
+                    $attributes['export'] = true;
+                if(!isset($attributes['comments']))
+                    $attributes['comments'] = '';
+                if(!isset($attributes['comments_top']))
+                    $attributes['comments_top'] = false;
+                if(!isset($attributes['custom_view']))
+                    $attributes['custom_view'] = false;
+                if(!isset($attributes['custom_input']))
+                    $attributes['custom_input'] = false;
+                if(!isset($attributes['custom_display']))
+                    $attributes['custom_display'] = false;
+                if(!isset($attributes['custom_form_display']))
+                    $attributes['custom_form_display'] = false;
+                $new_columns[$column] = $attributes;
+            }
+            $columns = $new_columns;
+        }
+        if(false!==$init)
+        {
+            if(!empty($this->form_columns))
+                $this->form_columns = $this->setup_columns($this->form_columns);
+            else
+                $this->form_columns = $columns;
+            if(!empty($this->search_columns))
+                $this->search_columns = $this->setup_columns($this->search_columns);
+            else
+                $this->search_columns = $columns;
+            if(!empty($this->export_columns))
+                $this->export_columns = $this->setup_columns($this->export_columns);
+            else
+                $this->export_columns = $columns;
+        }
+        return $columns;
     }
     function message ($msg)
     {
-        $msg = apply_filters('wp_ui_admin_message',$msg,$this);
+        $msg = $this->do_hook('message',$msg);
 ?>
 	<div id="message" class="updated fade"><p><?php echo $msg; ?></p></div>
 <?php
     }
     function error ($msg)
     {
-        $msg = apply_filters('wp_ui_admin_error',$msg,$this);
+        $msg = $this->do_hook('error',$msg);
 ?>
 	<div id="message" class="error fade"><p><?php echo $msg; ?></p></div>
 <?php
     }
     function go ()
     {
-        $this = apply_filters('wp_ui_admin_go',$this);
-        if($this->css!==false)
+        $this->do_hook('go');
+        $_GET = $this->unsanitize($_GET);
+        $_POST = $this->unsanitize($_POST);
+        if(false!==$this->css)
         {
 ?>
     <link  type="text/css" rel="stylesheet" href="<?php echo $this->css; ?>" />
@@ -223,11 +402,28 @@ class WP_UI_Admin
         if(isset($this->custom[$this->action])&&function_exists("{$this->custom[$this->action]}"))
             $this->custom[$this->action]($this);
         elseif($this->action=='add'&&$this->add)
-            $this->add();
+        {
+            if($this->do=='create'&&$this->save)
+            {
+                $this->save(1);
+                $this->manage();
+            }
+            else
+                $this->add();
+        }
         elseif($this->action=='edit'&&$this->edit)
+        {
+            if($this->do=='save'&&$this->save)
+            {
+                $this->save();
+            }
             $this->edit();
+        }
         elseif($this->action=='delete'&&$this->delete)
+        {
             $this->delete();
+            $this->manage();
+        }
         elseif($this->do=='save'&&$this->save)
         {
             $this->save();
@@ -245,16 +441,10 @@ class WP_UI_Admin
     }
     function add ()
     {
-        $this = apply_filters('wp_ui_admin_add',$this);
-        if($this->do=='save'&&isset($_POST)&&!empty($_POST))
-        {
-            $this->save(1);
-            $this->manage();
-            return;
-        }
+        $this->do_hook('add');
 ?>
 <div class="wrap">
-    <div id="icon-edit-pages" class="icon32"<?php if($this->icon!==false){ ?> style="background-position:0 0;background-image:url(<?php echo $this->icon; ?>);"<?php } ?>><br /></div>
+    <div id="icon-edit-pages" class="icon32"<?php if(false!==$this->icon){ ?> style="background-position:0 0;background-image:url(<?php echo $this->icon; ?>);"<?php } ?>><br /></div>
     <h2>Add New <?php echo $this->item; ?> <small>(<a href="<?php echo $this->var_update(array('action'=>'manage','id'=>'')); ?>">&laquo; Back to Manage</a>)</small></h2>
 <?php $this->form(1); ?>
 </div>
@@ -262,14 +452,12 @@ class WP_UI_Admin
     }
     function edit ()
     {
-        $this = apply_filters('wp_ui_admin_edit',$this);
+        $this->do_hook('edit');
         if(isset($this->custom['edit'])&&function_exists("{$this->custom['edit']}"))
             $this->custom['edit']($this);
-        if($this->do=='save'&&isset($_POST)&&!empty($_POST))
-            $this->save();
 ?>
 <div class="wrap">
-    <div id="icon-edit-pages" class="icon32"<?php if($this->icon!==false){ ?> style="background-position:0 0;background-image:url(<?php echo $this->icon; ?>);"<?php } ?>><br /></div>
+    <div id="icon-edit-pages" class="icon32"<?php if(false!==$this->icon){ ?> style="background-position:0 0;background-image:url(<?php echo $this->icon; ?>);"<?php } ?>><br /></div>
     <h2>Edit <?php echo $this->item; ?> <small>(<a href="<?php echo $this->var_update(array('action'=>'manage','id'=>'')); ?>">&laquo; Back to Manage</a>)</small></h2>
 <?php $this->form(); ?>
 </div>
@@ -277,10 +465,10 @@ class WP_UI_Admin
     }
     function form ($create=0)
     {
-        $this = apply_filters('wp_ui_admin_form',$this,$create);
+        $this->do_hook('form',$create);
         if(isset($this->custom['form'])&&function_exists("{$this->custom['form']}"))
             return $this->custom['form']($this,$create);
-        if($this->table===false&&$this->sql===false)
+        if(false===$this->table&&false===$this->sql)
             return $this->error('<strong>Error:</strong> Invalid Configuration - Missing "table" definition.');
         global $wpdb;
         if(empty($this->form_columns))
@@ -296,66 +484,19 @@ class WP_UI_Admin
                 return $this->error("<strong>Error:</strong> $this->item not found.");
             $submit = 'Save Changes';
             $id = $this->row['id'];
-            $vars = array('action'=>'manage','do'=>'save','id'=>$id);
+            $vars = array('action'=>'edit','do'=>'save','id'=>$id);
         }
 ?>
-    <form method="post" action="<?php echo $this->var_update($vars); ?>">
+    <form method="post" action="<?php echo $this->var_update($vars); ?>" class="wp_admin_ui">
         <table class="form-table">
 <?php
-        // available options
-        // type = date (data validation as datetime)
-            // date_update = use current timestamp when saving (even if readonly, if type=date)
-        // type = text / other (single line text box)
-        // type = desc (textarea)
-        // type = number (data validation as int float)
-        // type = decimal (data validation as decimal)
-        // type = password (single line password box)
-        // type = bool (single line password box)
-        // type = related (select box)
-            // related = table to relate to (if type=related)
-            // related_field = field name on table to show (if type=related) - default "name"
-            // related_multiple = true (ability to select multiple values if type=related)
-            // related_sql = custom where / order by SQL (if type=related)
-        // readonly = true (shows as text)
-        // display = false (doesn't show on form, but can be saved)
         foreach($this->form_columns as $column=>$attributes)
         {
-            if(!is_array($attributes))
-            {
-                $column = $attributes;
-                $attributes = array('type'=>'text');
-            }
-            if(!isset($attributes['label']))
-                $attributes['label'] = ucwords(str_replace('_',' ',$column));
             if(!isset($this->row[$column]))
                 $this->row[$column] = '';
             if($attributes['type']=='bool')
                 $selected = ($this->row[$column]==1?' CHECKED':'');
-            if(!isset($attributes['related']))
-                $attributes['related'] = false;
-            if(!isset($attributes['related_field']))
-                $attributes['related_field'] = 'name';
-            if(!isset($attributes['related_multiple']))
-                $attributes['related_multiple'] = false;
-            if(!isset($attributes['related_sql']))
-                $attributes['related_sql'] = false;
-            if(!isset($attributes['readonly']))
-                $attributes['readonly'] = false;
-            if(!isset($attributes['readonly']))
-                $attributes['readonly'] = false;
-            if(!isset($attributes['date_update']))
-                $attributes['date_update'] = false;
-            if(isset($attributes['update']))
-                $attributes['date_update'] = $attributes['update'];
-            if(!isset($attributes['display']))
-                $attributes['display'] = true;
-            if(!isset($attributes['custom_input']))
-                $attributes['custom_input'] = false;
-            if(!isset($attributes['custom_form_display']))
-                $attributes['custom_form_display'] = false;
-            if(!isset($attributes['comments']))
-                $attributes['comments'] = '';
-            if($attributes['display']===false)
+            if(false===$attributes['display'])
                 continue;
 ?>
     <tr valign="top">
@@ -367,8 +508,10 @@ class WP_UI_Admin
 ?>
             <span class="description"><?php echo $attributes['comments']; ?></span>
 <?php
+                if($attributes['type']!='desc'||$attributes['type']!='code')
+                    echo "<br />";
             }
-            if($attributes['custom_input']!==false&&function_exists("{$attributes['custom_input']}"))
+            if(false!==$attributes['custom_input']&&function_exists("{$attributes['custom_input']}"))
             {
                 $attributes['custom_input']($column,$attributes,$this);
 ?>
@@ -377,11 +520,11 @@ class WP_UI_Admin
 <?php
                 continue;
             }
-            if($attributes['custom_form_display']!==false&&function_exists("{$attributes['custom_form_display']}"))
+            if(false!==$attributes['custom_form_display']&&function_exists("{$attributes['custom_form_display']}"))
             {
                 $this->row[$column] = $attributes['custom_form_display']($column,$attributes,$this);
             }
-            if($attributes['readonly']===true)
+            if(false!==$attributes['readonly'])
             {
 ?>
             <div id="admin_ui_<?php echo $column; ?>"><?php echo $this->row[$column]; ?></div>
@@ -398,41 +541,74 @@ class WP_UI_Admin
                 elseif($attributes['type']=='password')
                 {
 ?>
-            <input type="password" name="<?php echo $column; ?>" id="admin_ui_<?php echo $column; ?>" value="<?php echo $this->row[$column]; ?>" />
+            <input type="password" name="<?php echo $column; ?>" id="admin_ui_<?php echo $column; ?>" value="<?php echo $this->row[$column]; ?>" class="regular-text" />
 <?php
                 }
-                elseif($attributes['type']=='desc')
+                elseif($attributes['type']=='desc'||$attributes['type']=='code')
                 {
 ?>
             <textarea name="<?php echo $column; ?>" id="admin_ui_<?php echo $column; ?>" rows="10" cols="50"><?php echo $this->row[$column]; ?></textarea>
 <?php
                 }
-                elseif($attributes['type']=='related'&&$attributes['related']!==false)
+                elseif($attributes['type']=='related'&&false!==$attributes['related'])
                 {
-                    $related = $wpdb->get_results('SELECT id,`'.$attributes['related_field'].'` FROM '.$attributes['related'].(!empty($attributes['related_sql'])?' '.$attributes['related_sql']:''));
-?>
-            <select name="<?php echo $column; ?><?php echo ($attributes['related_multiple']!==false?'[]':''); ?>" id="admin_ui_<?php echo $column; ?>"<?php echo ($attributes['related_multiple']!==false?' MULTIPLE':''); ?>>
-<?php
-                    $selected_options = explode(',',$this->row[$column]);
-                    foreach($related as $option)
+                    if(false===$attributes['related_custom'])
                     {
+                        $related = $wpdb->get_results('SELECT id,`'.$attributes['related_field'].'` FROM '.$attributes['related'].(!empty($attributes['related_sql'])?' '.$attributes['related_sql']:''));
+?>
+            <select name="<?php echo $column; ?><?php echo (false!==$attributes['related_multiple']?'[]':''); ?>" id="admin_ui_<?php echo $column; ?>"<?php echo (false!==$attributes['related_multiple']?' MULTIPLE':''); ?>>
+<?php
+                        $selected_options = explode(',',$this->row[$column]);
+                        foreach($related as $option)
+                        {
 ?>
                 <option value="<?php echo $option->id; ?>"<?php echo (in_array($option->id,$selected_options)?' SELECTED':''); ?>><?php echo $option->$attributes['related_field']; ?></option>
 <?php
-                    }
+                        }
 ?>
             </select>
 <?php
+                    }
+                    else
+                    {
+                        $related = $attributes['related_custom'];
+                        if(!is_array($related))
+                        {
+                            $related = explode(',',$related);
+                        }
+?>
+            <select name="<?php echo $column; ?><?php echo (false!==$attributes['related_multiple']?'[]':''); ?>" id="admin_ui_<?php echo $column; ?>"<?php echo (false!==$attributes['related_multiple']?' MULTIPLE':''); ?>>
+<?php
+                        $selected_options = explode(',',$this->row[$column]);
+                        foreach($related as $option_id=>$option)
+                        {
+                            if(!is_array($option))
+                            {
+                                $option_id = $option;
+                                $option = array();
+                            }
+                            if(!isset($option['label']))
+                                $option['label'] = ucwords(str_replace('_',' ',$option_id));
+?>
+                <option value="<?php echo $option->id; ?>"<?php echo (in_array($option->id,$selected_options)?' SELECTED':''); ?>><?php echo $option->$attributes['related_field']; ?></option>
+<?php
+                        }
+?>
+            </select>
+<?php
+                    }
                 }
                 else
                 {
 ?>
-            <input type="text" name="<?php echo $column; ?>" id="admin_ui_<?php echo $column; ?>" value="<?php echo $this->row[$column]; ?>" />
+            <input type="text" name="<?php echo $column; ?>" id="admin_ui_<?php echo $column; ?>" value="<?php echo $this->row[$column]; ?>" class="regular-text" />
 <?php
                 }
             }
-            if(!empty($attributes['comments'])&&empty($attributes['comments_top']))
+            if(!empty($attributes['comments'])&&false===$attributes['comments_top'])
             {
+                if($attributes['type']!='desc'||$attributes['type']!='code')
+                    echo "<br />";
 ?>
             <span class="description"><?php echo $attributes['comments']; ?></span>
 <?php
@@ -452,85 +628,42 @@ class WP_UI_Admin
     }
     function view ()
     {
-        $this = apply_filters('wp_ui_admin_view',$this);
+        $this->do_hook('view');
         if(isset($this->custom['view'])&&function_exists("{$this->custom['view']}"))
             return $this->custom['view']($this);
-        if($this->table===false&&$this->sql===false)
+        if(false===$this->table&&false===$this->sql)
             return $this->error('<strong>Error:</strong> Invalid Configuration - Missing "table" definition.');
         global $wpdb;
-        if(empty($this->form_columns))
-            $this->form_columns = $this->columns;
         if(empty($this->row))
             $this->get_row();
         if(empty($this->row))
             return $this->error("<strong>Error:</strong> $this->item not found.");
 ?>
 <div class="wrap">
-    <div id="icon-edit-pages" class="icon32"<?php if($this->icon!==false){ ?> style="background-position:0 0;background-image:url(<?php echo $this->icon; ?>);"<?php } ?>><br /></div>
+    <div id="icon-edit-pages" class="icon32"<?php if(false!==$this->icon){ ?> style="background-position:0 0;background-image:url(<?php echo $this->icon; ?>);"<?php } ?>><br /></div>
     <h2>View <?php echo $this->item; ?> <small>(<a href="<?php echo $this->var_update(array('action'=>'manage','id'=>'')); ?>">&laquo; Back to Manage</a>)</small></h2>
     <table class="form-table">
 <?php
-        // available options
-        // type = date (data validation as datetime)
-            // update = if type=date then use current timestamp when saving (even if readonly)
-        // type = text / other (single line text box)
-        // type = desc (textarea)
-        // type = number (data validation as int float)
-        // type = decimal (data validation as decimal)
-        // type = password (single line password box)
-        // type = bool (single line password box)
-        // type = related (select box)
-            // related = table to relate to (if type=related)
-            // related_field = field name on table to show (if type=related) - default "name"
-            // related_multiple = true (ability to select multiple values if type=related)
-            // related_sql = custom where / order by SQL (if type=related)
-        // readonly = true (shows as text)
-        // display = false (doesn't show on form, but can be saved)
         foreach($this->form_columns as $column=>$attributes)
         {
-            if(!is_array($attributes))
-            {
-                $column = $attributes;
-                $attributes = array('type'=>'text');
-            }
-            if(!isset($attributes['label']))
-                $attributes['label'] = ucwords(str_replace('_',' ',$column));
             if(!isset($this->row[$column]))
                 $this->row[$column] = '';
             if($attributes['type']=='bool')
                 $selected = ($this->row[$column]==1?' CHECKED':'');
-            if(!isset($attributes['related']))
-                $attributes['related'] = false;
-            if(!isset($attributes['related_field']))
-                $attributes['related_field'] = 'name';
-            if(!isset($attributes['related_multiple']))
-                $attributes['related_multiple'] = false;
-            if(!isset($attributes['related_sql']))
-                $attributes['related_sql'] = false;
-            if(!isset($attributes['readonly']))
-                $attributes['readonly'] = false;
-            if(!isset($attributes['update']))
-                $attributes['update'] = false;
-            if(!isset($attributes['display']))
-                $attributes['display'] = true;
-            if(!isset($attributes['custom_view']))
-                $attributes['custom_view'] = false;
-            if(!isset($attributes['comments']))
-                $attributes['comments'] = '';
-            if($attributes['display']===false)
+            if(false===$attributes['display'])
                 continue;
 ?>
         <tr valign="top">
             <th scope="row"><label for="admin_ui_<?php echo $column; ?>"><?php echo $attributes['label']; ?></label></th>
             <td>
 <?php
-            if(!empty($attributes['comments'])&&!empty($attributes['comments_top']))
+            if(!empty($attributes['comments'])&&false!==$attributes['comments_top'])
             {
 ?>
             <span class="description"><?php echo $attributes['comments']; ?></span>
 <?php
             }
-            if($attributes['custom_view']!==false&&function_exists("{$attributes['custom_view']}"))
+            if(false!==$attributes['custom_view']&&function_exists("{$attributes['custom_view']}"))
             {
                 $attributes['custom_view']($column,$attributes,$this);
 ?>
@@ -565,7 +698,7 @@ class WP_UI_Admin
 ?>
             <div id="admin_ui_<?php echo $column; ?>"><?php echo $this->row[$column]; ?></div>
 <?php
-            if(!empty($attributes['comments'])&&empty($attributes['comments_top']))
+            if(!empty($attributes['comments'])&&false===$attributes['comments_top'])
             {
 ?>
             <span class="description"><?php echo $attributes['comments']; ?></span>
@@ -581,76 +714,55 @@ class WP_UI_Admin
 </div>
 <?php
     }
-    function delete ()
+    function delete ($id=false)
     {
-        $this = apply_filters('wp_ui_admin_delete',$this);
+        $this->do_hook('pre_delete');
         if(isset($this->custom['delete'])&&function_exists("{$this->custom['delete']}"))
             return $this->custom['delete']($this);
-        if($this->table===false&&$this->sql===false)
+        if(false===$this->table&&false===$this->sql)
             return $this->error('<strong>Error:</strong> Invalid Configuration - Missing "table" definition.');
+        if(false===$this->id&&false===$id)
+            return $this->error('<strong>Error:</strong> Invalid Configuration - Missing "id" definition.');
+        if(false===$id)
+            $id = $this->id;
         global $wpdb;
-        $check = $wpdb->query($wpdb->prepare("DELETE FROM $this->table WHERE `id`=%d",array($this->id)));
+        $check = $wpdb->query($wpdb->prepare("DELETE FROM $this->table WHERE `id`=%d",array($id)));
         if($check)
             $this->message("<strong>Deleted:</strong> $this->item has been deleted.");
         else
             $this->error("<strong>Error:</strong> $this->item has not been deleted.");
-        $this->manage();
+        $this->do_hook('post_delete',$id);
     }
     function save ($create=0)
     {
-        $this = apply_filters('wp_ui_admin_save',$this,$create);
+        $this->do_hook('pre_save',$create);
         if(isset($this->custom['save'])&&function_exists("{$this->custom['save']}"))
             return $this->custom['save']($this);
         global $wpdb;
         $action = 'saved';
         if($create==1)
             $action = 'created';
-
-        // available options
-        // type = date (data validation as datetime)
-        // type = text / other (single line text box)
-        // type = desc (textarea)
-        // type = number (data validation as int float)
-        // type = decimal (data validation as decimal)
-        // type = password (single line password box)
-        // type = bool (single line password box)
-        // readonly = true (shows as text)
-        // update = if type=date then use current timestamp when saving (even if readonly)
-        // update_on_create = if type=date then use current timestamp when saving (only on creation, even if readonly)
-        // display = false (doesn't show on form, but can be saved)
         $column_sql = array();
         $values = array();
+        $data = array();
         foreach($this->form_columns as $column=>$attributes)
         {
             $vartype = '%s';
-            if(!is_array($attributes))
-            {
-                $column = $attributes;
-                $attributes = array('type'=>'text');
-            }
-            if(!isset($attributes['label']))
-                $attributes['label'] = ucwords(str_replace('_',' ',$column));
             if($attributes['type']=='bool')
                 $selected = ($_POST[$column]==1?1:0);
-            if($attributes['readonly']===false&&$attributes['type']!='date')
-                continue;
-            if(!isset($attributes['update']))
-                $attributes['update'] = false;
-            if(!isset($attributes['display']))
-                $attributes['display'] = true;
-            if(!isset($attributes['comments']))
-                $attributes['comments'] = '';
-            if($attributes['display']===false&&$attributes['type']!='date')
-                continue;
-
+            if(false===$attributes['display']||false!==$attributes['readonly'])
+            {
+                if($attributes['type']!='date')
+                    continue;
+                if(false===$attributes['date_touch']&&(false===$attributes['date_touch_on_create']||$create!=1||$this->id>0))
+                    continue;
+            }
             if($attributes['type']=='date')
             {
-                if($attributes['update']||($attributes['update_on_create']&&$create==1&&$this->id<1))
+                if(false!==$attributes['date_touch']||(false!==$attributes['date_touch_on_create']&&$create==1&&$this->id<1))
                     $value = date("Y-m-d H:i:s");
-                elseif(false===$attributes['readonly'])
-                    $value = date("Y-m-d H:i:s",strtotime($_POST[$column]));
                 else
-                    continue;
+                    $value = date("Y-m-d H:i:s",strtotime($_POST[$column]));
             }
             else
             {
@@ -681,10 +793,11 @@ class WP_UI_Admin
                 else
                     $value = $_POST[$column];
             }
-            if(isset($attributes['custom_save'])&&function_exists("{$attributes['custom_save']}"))
+            if(false!==$attributes['custom_save']&&function_exists("{$attributes['custom_save']}"))
                 $value = $attributes['custom_save']($value,$column,$attributes,$this);
             $column_sql[] = "`$column`=$vartype";
             $values[] = $value;
+            $data[$column] = $value;
         }
         $column_sql = implode(',',$column_sql);
         if($create==0&&$this->id>0)
@@ -703,10 +816,11 @@ class WP_UI_Admin
         }
         else
             $this->error('<strong>Error</strong> '.$this->item.' has not been '.$action.'.');
+        $this->do_hook('post_save',$this->insert_id,$data,$create);
     }
     function export ()
     {
-        $this = apply_filters('wp_ui_admin_export',$this);
+        $this->do_hook('export');
         require_once(ABSPATH . 'wp-admin/includes/file.php');
         $url = explode('/',$_SERVER['REQUEST_URI']);
         $url = array_reverse($url);
@@ -769,15 +883,23 @@ class WP_UI_Admin
                 $export_file = str_replace('-','_',sanitize_title($this->items)).'_'.date('m-d-Y_h-i-sa').'.csv';
                 $fp = fopen($this->export_dir.'/'.$export_file,'a+');
                 $head = '';
-                foreach($this->columns as $key=>$column)
-                    $head .= '"'.$column['label'].'",';
+                foreach($this->export_columns as $key=>$attributes)
+                {
+                    if(false===$attributes['display']&&false===$attributes['export'])
+                        continue;
+                    $head .= '"'.$attributes['label'].'",';
+                }
                 $head = substr($head,0,-1);
                 fwrite($fp,"$head\r\n");
                 foreach($this->full_data as $item)
                 {
                     $line = '';
-                    foreach($this->columns as $key=>$column)
+                    foreach($this->export_columns as $key=>$attributes)
+                    {
+                        if(false===$attributes['display']&&false===$attributes['export'])
+                            continue;
                         $line .= '"'.$item[$key].'",';
+                    }
                     $line = substr($line,0,-1);
                     fwrite($fp,"$line\r\n");
                 }
@@ -790,15 +912,23 @@ class WP_UI_Admin
                 $export_file = str_replace('-','_',sanitize_title($this->items)).'_'.date('m-d-Y_h-i-sa').'.tab';
                 $fp = fopen($this->export_dir.'/'.$export_file,'a+');
                 $head = '';
-                foreach($this->columns as $key=>$column)
-                    $head .= '"'.$column['label'].'"'."\t";
+                foreach($this->export_columns as $key=>$attributes)
+                {
+                    if(false===$attributes['display']&&false===$attributes['export'])
+                        continue;
+                    $head .= '"'.$attributes['label'].'"'."\t";
+                }
                 $head = substr($head,0,-1);
                 fwrite($fp,"$head\r\n");
                 foreach($this->full_data as $item)
                 {
                     $line = '';
-                    foreach($this->columns as $key=>$column)
+                    foreach($this->export_columns as $key=>$attributes)
+                    {
+                        if(false===$attributes['display']&&false===$attributes['export'])
+                            continue;
                         $line .= '"'.$item[$key].'"'."\t";
+                    }
                     $line = substr($line,0,-1);
                     fwrite($fp,"$line\r\n");
                 }
@@ -816,8 +946,12 @@ class WP_UI_Admin
                 foreach($this->full_data as $item)
                 {
                     $line = "\t<item>\r\n";
-                    foreach($this->columns as $key=>$column)
+                    foreach($this->export_columns as $key=>$attributes)
+                    {
+                        if(false===$attributes['display']&&false===$attributes['export'])
+                            continue;
                         $line .= "\t\t<{$key}><![CDATA[".$item[$key]."]]></{$key}>\r\n";
+                    }
                     $line .= "\t</item>\r\n";
                     fwrite($fp,$line);
                 }
@@ -835,8 +969,12 @@ class WP_UI_Admin
                 foreach($this->full_data as $item)
                 {
                     $row = array();
-                    foreach($this->columns as $key=>$column)
+                    foreach($this->export_columns as $key=>$attributes)
+                    {
+                        if(false===$attributes['display']&&false===$attributes['export'])
+                            continue;
                         $row[$key] = $item[$key];
+                    }
                     $data['items']['item'][] = $row;
                 }
                 fwrite($fp,json_encode($data));
@@ -850,20 +988,22 @@ class WP_UI_Admin
                 return false;
             }
         }
-        do_action('wp_ui_admin_export',$this,$export_file);
+        do_action('wp_admin_ui_export',$this,$export_file);
     }
-    function get_row ()
+    function get_row ($id=false)
     {
         if(isset($this->custom['row'])&&function_exists("{$this->custom['row']}"))
             return $this->custom['row']($this);
-        if($this->table===false&&$this->sql===false)
+        if(false===$this->table&&false===$this->sql)
             return $this->error('<strong>Error:</strong> Invalid Configuration - Missing "table" definition.');
-        if($this->id===false)
+        if(false===$this->id&&false===$id)
             return $this->error('<strong>Error:</strong> Invalid Configuration - Missing "id" definition.');
+        if(false===$id)
+            $id = $this->id;
         global $wpdb;
-        $sql = "SELECT * FROM $this->table WHERE `id`=".$wpdb->_real_escape($this->id);
+        $sql = "SELECT * FROM $this->table WHERE `id`=".$this->sanitize($id);
         $row = @current($wpdb->get_results($sql,ARRAY_A));
-        $row = apply_filters('wp_ui_admin_get_row',$row,$this);
+        $row = $this->do_hook('get_row',$row);
         if(!empty($row))
             $this->row = $row;
     }
@@ -871,18 +1011,16 @@ class WP_UI_Admin
     {
         if(isset($this->custom['data'])&&function_exists("{$this->custom['data']}"))
             return $this->custom['data']($this);
-        if($this->table===false&&$this->sql===false)
+        if(false===$this->table&&false===$this->sql)
             return $this->error('<strong>Error:</strong> Invalid Configuration - Missing "table" definition.');
         global $wpdb;
         if(false===$this->sql)
         {
             $sql = "SELECT SQL_CALC_FOUND_ROWS * FROM $this->table";
-            if(false!==$this->search&&false!==$this->search_query)
+            if(false!==$this->search&&false!==$this->search_query&&!empty($this->search_columns))
             {
-                $sql .= " WHERE ";
-                if(empty($this->search_columns))
-                    $this->search_columns = $this->columns;
                 $and = false;
+                $sql .= " WHERE ";
                 foreach($this->search_columns as $key=>$column)
                 {
                     if(is_array($column)&&isset($column['type'])&&$column['type']=='date')
@@ -893,7 +1031,7 @@ class WP_UI_Admin
                         $and = true;
                     if(is_array($column))
                         $column = $key;
-                    $sql .= "`$column` LIKE '%".$wpdb->_real_escape($this->search_query)."%'";
+                    $sql .= "`$column` LIKE '%".$this->sanitize($this->search_query)."%'";
                 }
             }
             $sql .= ' ORDER BY ';
@@ -911,26 +1049,21 @@ class WP_UI_Admin
         else
         {
             $sql = str_replace('SELECT ','SELECT SQL_CALC_FOUND_ROWS ',str_replace('SELECT SQL_CALC_FOUND_ROWS ','SELECT ',$this->sql));
-            if(false!==$this->search&&false!==$this->search_query)
+            if(false!==$this->search&&false!==$this->search_query&&!empty($this->search_columns))
             {
-                if(empty($this->search_columns))
-                    $this->search_columns = $this->columns;
                 $and = false;
-                if(!empty($this->columns))
+                $sql .= " WHERE ";
+                foreach($this->search_columns as $key=>$column)
                 {
-                    $sql .= " WHERE ";
-                    foreach($this->search_columns as $key=>$column)
-                    {
-                        if(is_array($column)&&isset($column['type'])&&$column['type']=='date')
-                            continue;
-                        if($and)
-                            $sql .= " OR ";
-                        else
-                            $and = true;
-                        if(is_array($column))
-                            $column = $key;
-                        $sql .= "`$column` LIKE '%".$wpdb->_real_escape($this->search_query)."%'";
-                    }
+                    if(is_array($column)&&isset($column['type'])&&$column['type']=='date')
+                        continue;
+                    if($and)
+                        $sql .= " OR ";
+                    else
+                        $and = true;
+                    if(is_array($column))
+                        $column = $key;
+                    $sql .= "`$column` LIKE '%".$this->sanitize($this->search_query)."%'";
                 }
             }
             if(false!==$this->pagination&&!$full)
@@ -941,7 +1074,7 @@ class WP_UI_Admin
             }
         }
         $results = $wpdb->get_results($sql,ARRAY_A);
-        $results = apply_filters('wp_ui_admin_get_data',$results,$this);
+        $results = $this->do_hook('get_data',$results);
         if($full)
             $this->full_data = $results;
         else
@@ -966,18 +1099,18 @@ class WP_UI_Admin
             }
         }
         $total = @current($wpdb->get_col("SELECT FOUND_ROWS()"));
-        $total = apply_filters('wp_ui_admin_get_data_total',$total,$this);
+        $total = $this->do_hook('get_data_total',$total);
         if(is_numeric($total))
             $this->total = $total;
     }
     function manage ()
     {
-        $this = apply_filters('wp_ui_admin_manage',$this);
+        $this->do_hook('manage');
         if(isset($this->custom['manage'])&&function_exists("{$this->custom['manage']}"))
             return $this->custom['manage']($this);
 ?>
 <div class="wrap">
-    <div id="icon-edit-pages" class="icon32"<?php if($this->icon!==false){ ?> style="background-position:0 0;background-image:url(<?php echo $this->icon; ?>);"<?php } ?>><br /></div>
+    <div id="icon-edit-pages" class="icon32"<?php if(false!==$this->icon){ ?> style="background-position:0 0;background-image:url(<?php echo $this->icon; ?>);"<?php } ?>><br /></div>
     <h2><?php echo $this->heading['manage']; ?> <?php echo $this->items; ?></h2>
 <?php
         if(isset($this->custom['header'])&&function_exists("{$this->custom['header']}"))
@@ -1074,7 +1207,7 @@ class WP_UI_Admin
     }
     function table ()
     {
-        $this = apply_filters('wp_ui_admin_table',$this);
+        $this->do_hook('table');
         if(isset($this->custom['table'])&&function_exists("{$this->custom['table']}"))
             return $this->custom['table']($this);
         if(empty($this->data))
@@ -1093,11 +1226,8 @@ class WP_UI_Admin
         $columns = array();
         if(!empty($this->columns)) foreach($this->columns as $column=>$attributes)
         {
-            if(!is_array($attributes))
-            {
-                $column = $attributes;
-                $attributes = array();
-            }
+            if(false===$attributes['display'])
+                continue;
             if(false===$name_column)
                 $id = 'title';
             else
@@ -1147,11 +1277,13 @@ class WP_UI_Admin
 <?php
             foreach($columns as $column=>$attributes)
             {
-                if(isset($attributes['custom_display'])&&function_exists("{$attributes['custom_display']}"))
+                if(false===$attributes['display'])
+                    continue;
+                if(false!==$attributes['custom_display']&&function_exists("{$attributes['custom_display']}"))
                 {
                     $row[$column] = $attributes['custom_display']($row[$column],$row,$this);
                 }
-                if(isset($attributes['custom_relate']))
+                if(false!==$attributes['custom_relate'])
                 {
                     global $wpdb;
                     $table = $attributes['custom_relate'];
@@ -1161,9 +1293,9 @@ class WP_UI_Admin
                     if(is_array($table))
                     {
                         if(isset($table['on']))
-                            $on = $wpdb->_real_escape($table['on']);
+                            $on = $this->sanitize($table['on']);
                         if(isset($table['is'])&&isset($row[$table['is']]))
-                            $is = $wpdb->_real_escape($row[$table['is']]);
+                            $is = $this->sanitize($row[$table['is']]);
                         if(isset($table['what']))
                         {
                             $what = array();
@@ -1171,18 +1303,18 @@ class WP_UI_Admin
                             {
                                 foreach($table['what'] as $wha)
                                 {
-                                    $what[] = $wpdb->_real_escape($wha);
+                                    $what[] = $this->sanitize($wha);
                                 }
                             }
                             else
                             {
-                                $what[] = $wpdb->_real_escape($table['what']);
+                                $what[] = $this->sanitize($table['what']);
                             }
                         }
                         if(isset($table['table']))
                             $table = $table['table'];
                     }
-                    $table = $wpdb->_real_escape($table);
+                    $table = $this->sanitize($table);
                     $wha = implode(',',$what);
                     $sql = "SELECT $wha FROM $table WHERE `$on`='$is'";
                     $value = @current($wpdb->get_results($sql,ARRAY_A));
@@ -1203,13 +1335,13 @@ class WP_UI_Admin
                     if($this->view)
                     {
 ?>
-            <td class="post-title page-title column-title"><strong><a class="row-title" href="<?php echo $this->var_update(array('action'=>'view','id'=>$row['id'])); ?>" title="View &#8220;<?php echo htmlentities($row[$column],ENT_COMPAT,'UTF-8'); ?>&#8221;"><?php echo $row[$column]; ?></a></strong>
+            <td class="post-title page-title column-title"><strong><a class="row-title" href="<?php echo $this->var_update(array('action'=>'view','id'=>$row['id'])); ?>" title="View &#8220;<?php echo htmlentities($row[$column]); ?>&#8221;"><?php echo $row[$column]; ?></a></strong>
 <?php
                     }
                     elseif($this->edit)
                     {
 ?>
-            <td class="post-title page-title column-title"><strong><a class="row-title" href="<?php echo $this->var_update(array('action'=>'edit','id'=>$row['id'])); ?>" title="Edit &#8220;<?php echo htmlentities($row[$column],ENT_COMPAT,'UTF-8'); ?>&#8221;"><?php echo $row[$column]; ?></a></strong>
+            <td class="post-title page-title column-title"><strong><a class="row-title" href="<?php echo $this->var_update(array('action'=>'edit','id'=>$row['id'])); ?>" title="Edit &#8220;<?php echo htmlentities($row[$column]); ?>&#8221;"><?php echo $row[$column]; ?></a></strong>
 <?php
                     }
                     else
@@ -1219,7 +1351,7 @@ class WP_UI_Admin
 <?php
                     }
 ?>
-            <div class="row-actions"><?php if(isset($this->custom['action_start'])&&function_exists("{$this->custom['action_start']}")){$this->custom['action_start']($this,$row);} if($this->view){ ?><span class='view'><a href="<?php echo $this->var_update(array('action'=>'view','id'=>$row['id'])); ?>" title="View this item">View</a><?php if($this->edit||$this->delete){ ?> | <?php } ?></span><?php } if(isset($this->custom['action_end_view'])&&function_exists("{$this->custom['action_end_view']}")){$this->custom['action_end_view']($this,$row);} if($this->edit){ ?><span class='edit'><a href="<?php echo $this->var_update(array('action'=>'edit','id'=>$row['id'])); ?>" title="Edit this item">Edit</a></span><?php } if($this->delete){ ?><span class='delete'><?php if($this->edit){ ?> | <?php } ?><a class='submitdelete' title='Delete this item' href='<?php echo $this->var_update(array('action'=>'delete','id'=>$row['id'])); ?>' onclick="if ( confirm('You are about to delete this item \'<?php echo htmlentities($row[$column],ENT_COMPAT,'UTF-8'); ?>\'\n \'Cancel\' to stop, \'OK\' to delete.') ) { return true;}return false;">Delete</a></span><?php } if(isset($this->custom['action_end'])&&function_exists("{$this->custom['action_end']}")){$this->custom['action_end']($this,$row);} ?></div></td>
+            <div class="row-actions"><?php if(isset($this->custom['action_start'])&&function_exists("{$this->custom['action_start']}")){$this->custom['action_start']($this,$row);} if($this->view){ ?><span class='view'><a href="<?php echo $this->var_update(array('action'=>'view','id'=>$row['id'])); ?>" title="View this item">View</a><?php if($this->edit||$this->delete){ ?> | <?php } ?></span><?php } if(isset($this->custom['action_end_view'])&&function_exists("{$this->custom['action_end_view']}")){$this->custom['action_end_view']($this,$row);} if($this->edit){ ?><span class='edit'><a href="<?php echo $this->var_update(array('action'=>'edit','id'=>$row['id'])); ?>" title="Edit this item">Edit</a></span><?php } if($this->delete){ ?><span class='delete'><?php if($this->edit){ ?> | <?php } ?><a class='submitdelete' title='Delete this item' href='<?php echo $this->var_update(array('action'=>'delete','id'=>$row['id'])); ?>' onclick="if ( confirm('You are about to delete this item \'<?php echo htmlentities($row[$column]); ?>\'\n \'Cancel\' to stop, \'OK\' to delete.') ) { return true;}return false;">Delete</a></span><?php } if(isset($this->custom['action_end'])&&function_exists("{$this->custom['action_end']}")){$this->custom['action_end']($this,$row);} ?></div></td>
 <?php
                 }
                 elseif($attributes['id']=='date')
@@ -1249,7 +1381,7 @@ jQuery('table.widefat tbody tr:even').addClass('alternate');
     }
     function pagination ()
     {
-        $this = apply_filters('wp_ui_admin_pagination',$this);
+        $this->do_hook('pagination');
         if(isset($this->custom['pagination'])&&function_exists("{$this->custom['pagination']}"))
             return $this->custom['pagination']($this);
         $page = $this->page;
@@ -1324,10 +1456,10 @@ jQuery('table.widefat tbody tr:even').addClass('alternate');
     }
     function limit ($options=false)
     {
-        $this = apply_filters('wp_ui_admin_limit',$this,$options);
+        $this->do_hook('limit',$options);
         if(isset($this->custom['limit'])&&function_exists("{$this->custom['limit']}"))
             return $this->custom['limit']($this);
-        if($options===false||!is_array($options)||empty($options))
+        if(false===$options||!is_array($options)||empty($options))
             $options = array(10,25,50,100,200);
         if(!in_array($this->limit,$options))
             $this->limit = $options[1];
