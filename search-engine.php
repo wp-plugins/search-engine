@@ -127,8 +127,8 @@ function search_engine_menu ()
     add_submenu_page('search-engine', 'XML Sitemaps', 'XML Sitemaps', $has_full_access ? 'read' : 'search_engine_view_indexmaps', 'search-engine-xml-sitemaps', 'search_engine_xml_sitemaps');
     add_submenu_page('search-engine', 'Groups', 'Groups', $has_full_access ? 'read' : 'search_engine_groups', 'search-engine-groups', 'search_engine_groups');
     add_submenu_page('search-engine', 'View Index', 'View Index', $has_full_access ? 'read' : 'search_engine_view_index', 'search-engine-view-index', 'search_engine_view_index');
-    add_submenu_page('search-engine', 'View  Search Logs', 'View Search Logs', $has_full_access ? 'read' : 'search_engine_logs', 'search-engine-logs', 'search_engine_logs');
     */
+    add_submenu_page('search-engine', 'View  Search Logs', 'View Search Logs', $has_full_access ? 'read' : 'search_engine_logs', 'search-engine-logs', 'search_engine_logs');
     add_submenu_page('search-engine', 'Settings', 'Settings', $has_full_access ? 'read' : 'search_engine_settings', 'search-engine-settings', 'search_engine_settings');
     add_submenu_page('search-engine', 'About', 'About', $has_full_access ? 'read' : $min_cap, 'search-engine-about', 'search_engine_about');
 }
@@ -636,7 +636,7 @@ function search_engine_view_index_run ($obj,$row)
 function search_engine_logs ()
 {
     require_once SEARCH_ENGINE_DIR.'/wp-admin-ui/Admin.class.php';
-    $admin = new WP_Admin_UI(array('item'=>'Search Log','items'=>'Search Logs','table'=>SEARCH_ENGINE_TBL.'log','columns'=>array('query','time'=>array('type'=>'date','label'=>'Date of Search'),'elapsed'=>array('label'=>'Processing Time'),'results'=>array('label'=>'Total Results Found')),'add'=>false,'edit'=>false,'delete'=>false,'icon'=>SEARCH_ENGINE_URL.'/assets/icons/search_32.png'));
+    $admin = new WP_Admin_UI(array('export'=>true,'item'=>'Search Log','items'=>'Search Logs','table'=>SEARCH_ENGINE_TBL.'log','columns'=>array('query','time'=>array('type'=>'date','label'=>'Date of Search','filter'=>true),'elapsed'=>array('label'=>'Processing Time'),'results'=>array('label'=>'Total Results Found')),'add'=>false,'edit'=>false,'delete'=>false,'icon'=>SEARCH_ENGINE_URL.'/assets/icons/search_32.png'));
     $admin->go();
 }
 function search_engine_settings ()
@@ -737,6 +737,7 @@ function search_engine_about ()
                         <ul>
                             <li>Easy Indexing Wizard - Create Templates and Index Existing / New Sites</li>
                             <li>Index Templates - Reindex Sites via the Wizard or via cronjob.php</li>
+                            <li>View Search Logs - View queries recently typed, how long it took them to process, and how many results were returned</li>
                             <li>Admin.Class.php - A class for plugins to manage data using the WordPress UI appearance</li>
                         </ul>
                     </li>
@@ -781,7 +782,6 @@ function search_engine_about ()
                         <ul>
                             <li>Search Settings - Setup / control multiple searches on your site</li>
                             <li>Negative Keyword Matching using -word Format</li>
-                            <li>View Search Logs - View queries recently typed, how long it took them to process, and how many results were returned</li>
                             <li>Cronjob Groups - Ability to run multiple templates at a time based on Cronjob Group in cronjob.php</li>
                             <li>Integration with wp_cron - Option to enable a template to rerun on it's own - like magic!</li>
                             <li>View Index Logs - View statistics from indexing like Links Not Found, Links Redirected, etc</li>
@@ -890,6 +890,7 @@ function search_engine_form ()
 }
 function search_engine_content ($atts=false)
 {
+    $time = date('Y-m-d H:i:s');
     global $search_engine;
     include_once SEARCH_ENGINE_DIR.'/classes/API.class.php';
     $api = new Search_Engine_API();
@@ -921,13 +922,16 @@ function search_engine_content ($atts=false)
         $query = stripslashes($_GET['q']);
     elseif(isset($_GET['s']))
         $query = stripslashes($_GET['s']);
+    timer_start();
     $search = new Search_Engine_Search($site_ids,$template_ids);
     if(isset($_GET['pg'])&&ctype_digit($_GET['pg'])&&0<$_GET['pg'])
-    {
         $search->page = $_GET['pg'];
-    }
     $search->results_per_page = 10;
     $results = $search->search_build_query($query);
+    $elapsed = timer_stop(0,0);
+    $api = new Search_Engine_API();
+    $params = array('query'=>$query,'time'=>$time,'elapsed'=>$elapsed,'results'=>count($search->total_results));
+    $api->log_query($params);
     if(!wp_style_is('search-engine')&&!isset($search_engine['css_output'])&&$css==1&&!defined('SEARCH_ENGINE_CUSTOM_CSS'))
     {
         $search_engine['css_output'] =1;
@@ -948,34 +952,34 @@ function search_engine_content ($atts=false)
 ?>
 <div class="search_engine_InfoBar">
 <?php
-    $total_pages = ceil($search->total_results / $search->results_per_page);
-    $begin = ($search->results_per_page*$search->page)-($search->results_per_page-1);
-    $end = ($total_pages==$search->page?$search->total_results:($search->results_per_page*$search->page));
-    $page = $search->page;
-    $rows_per_page = $search->results_per_page;
-    $request_uri = $_SERVER['REQUEST_URI'];
-    $explode = explode('?',$request_uri);
-    $explode = @end($explode);
-    parse_str($explode,$replace);
-    if(isset($replace['pg']))
-        unset($replace['pg']);
-    if(isset($replace['submit']))
-        unset($replace['submit']);
-    $replace = http_build_query($replace);
-    $request_uri = str_replace($explode,$replace,$request_uri).'&';
+        $total_pages = ceil($search->total_results / $search->results_per_page);
+        $begin = ($search->results_per_page*$search->page)-($search->results_per_page-1);
+        $end = ($total_pages==$search->page?$search->total_results:($search->results_per_page*$search->page));
+        $page = $search->page;
+        $rows_per_page = $search->results_per_page;
+        $request_uri = $_SERVER['REQUEST_URI'];
+        $explode = explode('?',$request_uri);
+        $explode = @end($explode);
+        parse_str($explode,$replace);
+        if(isset($replace['pg']))
+            unset($replace['pg']);
+        if(isset($replace['submit']))
+            unset($replace['submit']);
+        $replace = http_build_query($replace);
+        $request_uri = str_replace($explode,$replace,$request_uri).'&';
 ?>
 	<p>Result<?php echo ($search->total_results==1&&!empty($results))?'':'s'; ?> <strong><?php if($search->total_results<1||empty($results)){ echo 0; } else { echo $begin; ?> - <?php echo $end; } ?></strong> of <strong><?php if($search->total_results<1||empty($results)){ echo 0; } else { echo $search->total_results; } ?></strong> for <strong><?php echo htmlentities($query,ENT_COMPAT,'UTF-8'); ?></strong></p>
 </div>
 <?php
-    if(!empty($results))
-    {
+        if(!empty($results))
+        {
 ?>
 <ul class="search_engine_results">
 <?php
-        foreach($results as $result)
-        {
-            if(empty($result->description))
-                $result->description = $result->fulltxt;
+            foreach($results as $result)
+            {
+                if(empty($result->description))
+                    $result->description = $result->fulltxt;
 ?>
     <li>
         <h3 class="search_engine_Title"><a href="<?php echo $result->url; ?>"><?php echo $search->search_do_excerpt($result->title,68); ?></a></h3>
@@ -987,9 +991,9 @@ function search_engine_content ($atts=false)
 ?>
 </ul>
 <?php
-    }
-    else
-    {
+        }
+        else
+        {
 ?>
     <p class="search_engine_normal">Your search - <strong><?php echo $query; ?></strong> - did not match any documents.</p>
     <p class="search_engine_normal">Suggestions:</p>
@@ -999,75 +1003,75 @@ function search_engine_content ($atts=false)
         <li>Try more general keywords.</li>
     </ul>
 <?php
-    }
-    if(1<$total_pages)
-    {
+        }
+        if(1<$total_pages)
+        {
 ?>
 <div class="search_engine_Pagination">
 <?php
-        if (1 < $page)
-        {
+            if (1 < $page)
+            {
 ?>
             <a href="<?php echo $request_uri; ?>pg=<?php echo $page-1; ?>" class="prev page-numbers search_engine_PrevLink">Previous</a>
             <a href="<?php echo $request_uri; ?>pg=1" class="page-numbers">1</a>
 <?php
-        }
-        if (1 < ($page - 100))
-        {
+            }
+            if (1 < ($page - 100))
+            {
 ?>
             <a href="<?php echo $request_uri; ?>pg=<?php echo ($page - 100); ?>" class="page-numbers"><?php echo ($page - 100); ?></a>
 <?php
-        }
-        if (1 < ($page - 10))
-        {
+            }
+            if (1 < ($page - 10))
+            {
 ?>
             <a href="<?php echo $request_uri; ?>pg=<?php echo ($page - 10); ?>" class="page-numbers"><?php echo ($page - 10); ?></a>
 <?php
-        }
-        for ($i = 2; $i > 0; $i--)
-        {
-            if (1 < ($page - $i))
+            }
+            for ($i = 2; $i > 0; $i--)
             {
+                if (1 < ($page - $i))
+                {
 ?>
             <a href="<?php echo $request_uri; ?>pg=<?php echo ($page - $i); ?>" class="page-numbers"><?php echo ($page - $i); ?></a>
 <?php
-           }
-    }
+               }
+        }
 ?>
             <span class="page-numbers current"><?php echo $page; ?></span>
 <?php
-        for ($i = 1; $i < 3; $i++)
-        {
-            if ($total_pages > ($page + $i))
+            for ($i = 1; $i < 3; $i++)
             {
+                if ($total_pages > ($page + $i))
+                {
 ?>
             <a href="<?php echo $request_uri; ?>pg=<?php echo ($page + $i); ?>" class="page-numbers"><?php echo ($page + $i); ?></a>
 <?php
+                }
             }
-        }
-        if ($total_pages > ($page + 10))
-        {
+            if ($total_pages > ($page + 10))
+            {
 ?>
             <a href="<?php echo $request_uri; ?>pg=<?php echo ($page + 10); ?>" class="page-numbers"><?php echo ($page + 10); ?></a>
 <?php
-        }
-        if ($total_pages > ($page + 100))
-        {
+            }
+            if ($total_pages > ($page + 100))
+            {
 ?>
             <a href="<?php echo $request_uri; ?>pg=<?php echo ($page + 100); ?>" class="page-numbers"><?php echo ($page + 100); ?></a>
 <?php
-        }
-        if ($page < $total_pages)
-        {
+            }
+            if ($page < $total_pages)
+            {
 ?>
             <a href="<?php echo $request_uri; ?>pg=<?php echo $total_pages; ?>" class="page-numbers"><?php echo $total_pages; ?></a>
             <a href="<?php echo $request_uri; ?>pg=<?php echo $page+1; ?>" class="next page-numbers search_engine_NextLink">Next</a>
 <?php
-        }
+            }
 ?>
 </div>
 <?php
-    }
+        }
     }
 ?>
 </div>

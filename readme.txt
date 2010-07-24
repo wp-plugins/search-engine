@@ -27,6 +27,7 @@ What if my site or parts of my site is password protected? Currently, only htacc
 == Changelog ==
 
 = 0.5.0 =
+* Bug fixes + features in Admin.class.php
 * AND / OR / "Exact Phrase" multi-combination Support
 * Bug fixes in indexing
 * Bug fixes in search

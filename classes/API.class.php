@@ -407,6 +407,17 @@ class Search_Engine_API
     {
 
     }
+    function log_query ($params)
+    {
+        if(false===$this->validate($params,array('query','time','elapsed','results')))
+        {
+            return false;
+        }
+        global $wpdb;
+        $wpdb->query($wpdb->prepare("INSERT INTO $this->table_log (`query`,`time`,`elapsed`,`results`) VALUES ( %s, %s, %d, %d )",
+                array($params['query'],date('Y-m-d H:i:s',strtotime($params['time'])),$params['elapsed'],$params['results'])));
+        return $wpdb->insert_id;
+    }
     function cronjob ($params)
     {
 
