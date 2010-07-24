@@ -326,7 +326,7 @@ function search_engine_wizard_run ()
             $site_id = $_POST['existing_site'];
         }
         $_POST['site'] = $site_id;
-        require_once SEARCH_ENGINE_DIR.'/classes/Admin.class.php';
+        require_once SEARCH_ENGINE_DIR.'/wp-admin-ui/Admin.class.php';
         $columns = array('site'=>array('custom_relate'=>array('table'=>SEARCH_ENGINE_TBL.'sites','what'=>'host')),'indexed'=>array('label'=>'Date Indexed','type'=>'date'),'updated'=>array('label'=>'Last Modified','type'=>'date'),'id'=>array('label'=>'Template ID'));
         $form_columns = $columns;
         unset($form_columns['id']);
@@ -406,7 +406,7 @@ function search_engine_index_templates ()
         }
         $_POST['site'] = $site_id;
     }
-    require_once SEARCH_ENGINE_DIR.'/classes/Admin.class.php';
+    require_once SEARCH_ENGINE_DIR.'/wp-admin-ui/Admin.class.php';
     $columns = array('site'=>array('custom_relate'=>array('table'=>SEARCH_ENGINE_TBL.'sites','what'=>'host','is'=>'site')),'indexed'=>array('label'=>'Date Indexed','type'=>'date'),'updated'=>array('label'=>'Last Modified','type'=>'date'),'id'=>array('label'=>'Template ID'));
     $form_columns = $columns;
     unset($form_columns['id']);
@@ -593,7 +593,7 @@ function search_engine_index_form ($obj,$create=0)
 }
 function search_engine_groups ()
 {
-    require_once SEARCH_ENGINE_DIR.'/classes/Admin.class.php';
+    require_once SEARCH_ENGINE_DIR.'/wp-admin-ui/Admin.class.php';
     $columns = array('name','created'=>array('label'=>'Date Created','type'=>'date'),'updated'=>array('label'=>'Last Modified','type'=>'date'));
     $form_columns = $columns;
     $form_columns['created']['update'] = false;
@@ -609,7 +609,7 @@ function search_engine_groups_form ($obj)
 }
 function search_engine_view_index ()
 {
-    require_once SEARCH_ENGINE_DIR.'/classes/Admin.class.php';
+    require_once SEARCH_ENGINE_DIR.'/wp-admin-ui/Admin.class.php';
     $columns = array('host'=>array('label'=>'Site URL','custom_display'=>'search_engine_view_index_display'),'indexed'=>array('label'=>'Date Indexed','type'=>'date'),'updated'=>array('label'=>'Last Modified','type'=>'date'));
     $form_columns = $columns;
     unset($form_columns['indexed']);
@@ -635,7 +635,7 @@ function search_engine_view_index_run ($obj,$row)
 }
 function search_engine_logs ()
 {
-    require_once SEARCH_ENGINE_DIR.'/classes/Admin.class.php';
+    require_once SEARCH_ENGINE_DIR.'/wp-admin-ui/Admin.class.php';
     $admin = new WP_Admin_UI(array('item'=>'Search Log','items'=>'Search Logs','table'=>SEARCH_ENGINE_TBL.'log','columns'=>array('query','time'=>array('type'=>'date','label'=>'Date of Search'),'elapsed'=>array('label'=>'Processing Time'),'results'=>array('label'=>'Total Results Found')),'add'=>false,'edit'=>false,'delete'=>false,'icon'=>SEARCH_ENGINE_URL.'/assets/icons/search_32.png'));
     $admin->go();
 }
@@ -667,7 +667,7 @@ function search_engine_settings ()
 function search_engine_search_settings ()
 {
     global $wpdb;
-    require_once SEARCH_ENGINE_DIR.'/classes/Admin.class.php';
+    require_once SEARCH_ENGINE_DIR.'/wp-admin-ui/Admin.class.php';
     $columns = array('name','searched'=>array('label'=>'Last Searched','type'=>'date'),'updated'=>array('label'=>'Last Modified','type'=>'date'));
     $form_columns = $columns;
     unset($form_columns['searched']);
