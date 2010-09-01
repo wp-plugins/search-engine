@@ -4,7 +4,7 @@ Donate link: http://www.scottkclark.com/
 Tags: search engine, spider, index, search, google, buddypress, full search, wordpress search
 Requires at least: 2.9
 Tested up to: 3.0
-Stable tag: 0.5.1
+Stable tag: 0.5.2
 
 THIS IS A BETA VERSION - Currently in development - A search engine for WordPress that indexes ALL of your site and provides comprehensive search.
 
@@ -36,6 +36,9 @@ Currently, only .htaccess password protected pages are supported, I'm currently 
 * Disallow many links within section(s) of your site by adding the class nofollow to the element tag(s)
 
 == Changelog ==
+
+= 0.5.2 =
+* Added option to Reset all data, and added ability to edit the Search Engine Token Key
 
 = 0.5.1 =
 * You can now index based off of a directory, when indexing a new site simply type in the path like a normal url at the end of a domain name and you'll start indexing from that page on (previously restricted to the root only)
@@ -88,6 +91,9 @@ Currently, only .htaccess password protected pages are supported, I'm currently 
 * First official release to the public as a plugin
 
 == Upgrade Notice ==
+
+= 0.5.2 =
+* Added option to Reset all data, and added ability to edit the Search Engine Token Key
 
 = 0.5.1 =
 * You can now index based off of a directory, when indexing a new site simply type in the path like a normal url at the end of a domain name and you'll start indexing from that page on (previously restricted to the root only)

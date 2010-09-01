@@ -58,6 +58,18 @@ CREATE TABLE `wp_searchengine_log` (
   PRIMARY KEY (`id`)
 ) DEFAULT CHARSET=utf8;
 
+DROP TABLE IF EXISTS `wp_searchengine_queue`;
+CREATE TABLE `wp_searchengine_queue` (
+  `id` int(10) NOT NULL AUTO_INCREMENT,
+  `site` int(10) NOT NULL,
+  `template` int(10) NOT NULL,
+  `shutdown` int(1) NOT NULL,
+  `added` datetime NOT NULL,
+  `updated` datetime NOT NULL,
+  `queue` longtext COLLATE utf8_unicode_ci NOT NULL,
+  PRIMARY KEY (`id`)
+) DEFAULT CHARSET=utf8;
+
 DROP TABLE IF EXISTS `wp_searchengine_search`;
 CREATE TABLE `wp_searchengine_search` (
   `id` int(10) NOT NULL AUTO_INCREMENT,
@@ -90,6 +102,7 @@ CREATE TABLE `wp_searchengine_templates` (
   `blacklist_words` longtext NOT NULL,
   `blacklist_uri_words` longtext NOT NULL,
   `max_depth` int(10) NOT NULL,
+  `cross_scheme` int(10) unsigned DEFAULT NULL,
   `whitelist_uri_words` longtext NOT NULL,
   `htaccess_username` varchar(255) NOT NULL,
   `htaccess_password` varchar(255) NOT NULL,

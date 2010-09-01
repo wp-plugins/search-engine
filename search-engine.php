@@ -3,7 +3,7 @@
 Plugin Name: Search Engine
 Plugin URI: http://www.scottkclark.com/wordpress/search-engine/
 Description: THIS IS A BETA VERSION - Currently in development - A search engine for WordPress that indexes ALL of your site and provides comprehensive search.
-Version: 0.5.1
+Version: 0.5.2
 Author: Scott Kingsley Clark
 Author URI: http://www.scottkclark.com/
 
@@ -24,7 +24,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 global $wpdb;
 define('SEARCH_ENGINE_TBL',$wpdb->prefix.'searchengine_');
-define('SEARCH_ENGINE_VERSION','051');
+define('SEARCH_ENGINE_VERSION','052');
 define('SEARCH_ENGINE_URL', WP_PLUGIN_URL . '/search-engine');
 define('SEARCH_ENGINE_DIR', WP_PLUGIN_DIR . '/search-engine');
 define('SEARCH_ENGINE_XML_SITEMAPS_DIR',WP_CONTENT_DIR.'/xml-sitemaps');
@@ -37,17 +37,7 @@ function search_engine_init ()
     $version = (int)get_option('search_engine_version');
     if(empty($version))
     {
-        // thx pods ;)
-        $sql = file_get_contents(SEARCH_ENGINE_DIR.'/assets/dump.sql');
-        $sql_explode = preg_split("/;\n/", str_replace('DEFAULT CHARSET=utf8','DEFAULT CHARSET='.DB_CHARSET,str_replace('wp_',$wpdb->prefix,$sql)));
-        if(count($sql_explode)==1)
-            $sql_explode = preg_split("/;\r/", str_replace('wp_', $wpdb->prefix, $sql));
-        for ($i = 0, $z = count($sql_explode); $i < $z; $i++)
-        {
-            $wpdb->query($sql_explode[$i]);
-        }
-        delete_option('search_engine_version');
-        add_option('search_engine_version',SEARCH_ENGINE_VERSION);
+        search_engine_reset();
     }
     elseif($version!=SEARCH_ENGINE_VERSION)
     {
@@ -82,6 +72,21 @@ function search_engine_init ()
         if(!empty($search_engine_full_access))
             $current_user->add_cap($search_engine_full_access);
     }
+}
+function search_engine_reset ()
+{
+    global $wpdb;
+    // thx pods ;)
+    $sql = file_get_contents(SEARCH_ENGINE_DIR.'/assets/dump.sql');
+    $sql_explode = preg_split("/;\n/", str_replace('DEFAULT CHARSET=utf8','DEFAULT CHARSET='.DB_CHARSET,str_replace('wp_',$wpdb->prefix,$sql)));
+    if(count($sql_explode)==1)
+        $sql_explode = preg_split("/;\r/", str_replace('wp_', $wpdb->prefix, $sql));
+    for ($i = 0, $z = count($sql_explode); $i < $z; $i++)
+    {
+        $wpdb->query($sql_explode[$i]);
+    }
+    delete_option('search_engine_version');
+    add_option('search_engine_version',SEARCH_ENGINE_VERSION);
 }
 function search_engine_get_capabilities ($caps)
 {
@@ -786,6 +791,13 @@ function search_engine_logs ()
 }
 function search_engine_settings ()
 {
+    if(!empty($_POST))
+    {
+        if(!empty($_POST['cronjob_token']))
+            update_option('search_engine_token',$_POST['cronjob_token']);
+        if(!empty($_POST['reset']))
+            search_engine_reset();
+    }
 ?>
 <div class="wrap">
     <div id="icon-edit-pages" class="icon32" style="background-position:0 0;background-image:url(<?php echo SEARCH_ENGINE_URL; ?>/assets/icons/search_32.png);"><br /></div>
@@ -799,6 +811,12 @@ function search_engine_settings ()
                     <input name="cronjob_token" type="text" id="cronjob_token" size="50" value="<?php echo get_option('search_engine_token'); ?>" /><br />
                     <span class="description">By default, this is generated based on your secure keys from wp-config.php - but you can change it here. Make sure it's secure and that no one else gets this -- this key allows you to Index your site from a Cronjob on your server or by accessing the URL.<br />
                         <label for="cronjob_url" style="font-style:normal;"><strong>URL to Cronjob:</strong></label><br /><input type="text" id="cronjob_url" style="width:100%;" value="<?php echo SEARCH_ENGINE_URL; ?>/cronjob.php?template_id=YOUR_TEMPLATE_ID&token=<?php echo get_option('search_engine_token'); ?>" /></span>
+                </td>
+            </tr>
+            <tr valign="top">
+                <th scope="row"><label for="reset">Reset ALL Data</label></th>
+                <td>
+                    <input name="reset" type="checkbox" id="reset" value="1" />
                 </td>
             </tr>
         </table>
