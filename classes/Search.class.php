@@ -238,6 +238,19 @@ class Search_Engine_Search
         {
             $terms = explode(' ',$query);
 			//$this->query_string .= ' (';
+            /*
+			$local_query_string = ' (';
+            $sql = array();
+            foreach($terms as $term)
+            {
+                $sql[] .=  SEARCH_ENGINE_TBL.'keywords.name LIKE %s';
+                //array_push($this->params, '%'.$term.'%');
+            }
+			//$this->query_string .= implode(' OR ',$sql).') ';
+			$local_query_string .= implode(' AND ',$sql).') OR ';
+            $terms = explode(' ',$query);
+			//$this->query_string .= ' (';
+            */
 			$local_query_string = ' (';
             $sql = array();
             foreach($terms as $term)
@@ -268,23 +281,28 @@ class Search_Engine_Search
             $this->total_results = $total['FOUND_ROWS()'];
         else
             $this->total_results = $total;
-
         return $this->results;
     }
         
     function combine_or_results($input_array){
     	$OR_results_array = array();
+    	$OR_counter_arary = array();
     	foreach($input_array as $element){
 			$search_result_set = $this->search_get_results($element);
 			if(empty($OR_results_array)){
 				//These are already sorted by weight.
 				$OR_results_array = $search_result_set;
+				if(sizeof($OR_results_array) > 0){
+					$OR_counter_array = array_fill(0,sizeof($OR_results_array),1);
+				}
+				//I can use the same results array, to save space and speed, by adding a ['frequency'] dimension
 			}else{
 				foreach($search_result_set as $search_item){	
 			    	$found=0;					
 					for($i=0; $i<sizeof($OR_results_array); $i++){
 						if($search_item->id == $OR_results_array[$i]->id){
 							$OR_results_array[$i]->weight = $OR_results_array[$i]->weight + $search_item->weight;
+							$OR_counter_array[$i] = $OR_counter_array[$i] + 1;
 							//If we have a match, break out of the for loop above.
 							$found=1;
 							break;
@@ -292,11 +310,13 @@ class Search_Engine_Search
 					}
 					if($found == 0){
 						array_push($OR_results_array,$search_item);
+						array_push($OR_counter_array,1);
 					}
 				}
 			}
     	}
-    	return $this->sort_by_weight($OR_results_array);
+    	//return $this->sort_by_weight($OR_results_array);
+    	return $this->sort_by_weight_and_frequency($OR_results_array,$OR_counter_array);
     }
     function combine_and_results($input_array){
     	$AND_results_array = array();
@@ -318,7 +338,8 @@ class Search_Engine_Search
     	return $this->sort_by_weight($AND_results_array);    	
     }
 
-    function sort_by_weight($results_array){
+	//DO NOT GET RID OF THIS YET.
+    /*function sort_by_weight($results_array){
     	//Pull out the indices of the weights...
     	$hollow_array = array();
     	$results_return_array = array();
@@ -328,14 +349,55 @@ class Search_Engine_Search
     	arsort($hollow_array);
     	$i = 0;
 		foreach($hollow_array as $key => $val){
+			//$key is the location (i) in the original results array.
 			$results_return_array[$i++] = $results_array[$key];
-		}
+		}	
 		return $results_return_array;
+    }*/
+    
+    function sort_by_weight($results_array){
+    	$frequency_array = array();
+    	if(sizeof($results_array)>0){
+	    	$frequency_array = array_fill(0,sizeof($results_array),1);    	
+    	}
+    	return $this->sort_by_weight_and_frequency($results_array,$frequency_array);
     }
     
-    function search_do_excerpt ($content,$limit=300)
+    function sort_by_weight_and_frequency($results_array,$frequency_array){
+    	$id_array = array();
+    	$weight_array = array();
+    	for($i=0; $i<sizeof($results_array); $i++){
+    		$weight_array[$i] = $results_array[$i]->weight;
+			$id_array[$i] = $results_array[$i]->id;	
+    	}
+    	/* //UNCOMMENT THIS BLOCK TO SEE ORIGINAL WEIGHTS, FREQUENCIES AND IDS
+    	print_r($id_array);
+    	print('<br><br>');
+    	print_r($weight_array);
+    	print('<br><br>');
+    	print_r($frequency_array);
+    	print('<br><br>');*/
+    	if(sizeof($frequency_array) > 0){
+	    	array_multisort($frequency_array, SORT_DESC, $weight_array, SORT_DESC, $results_array);    	    	
+    	}else{
+    		array_multisort($weight_array, SORT_DESC, $results_array);    	    		
+    	}
+		/* //UNCOMMENT THIS BLOCK TO SEE THE NEW ID ORDER WITH CORRESPONDING WEIGHTS
+		print('ids:<br>');
+    	for($i=0; $i<sizeof($results_array); $i++){
+    		print($results_array[$i]->id . ' ');
+    	}
+		print('<br>weights:<br>');
+    	for($i=0; $i<sizeof($results_array); $i++){
+    		print($results_array[$i]->weight . ' ');
+    	}    	
+    	exit;*/
+    	return $results_array;
+    }
+    
+    function search_do_excerpt ($content,$limit=300,$encode=true)
     {
-        $terms = explode(' ',html_entity_decode($this->search_string));
+        $terms = explode(' ',html_entity_decode($this->search_string,ENT_COMPAT,get_bloginfo('charset')));
         $terms = array_filter($terms);
         $excerpt_length = $limit;
         $excerpting = false;
@@ -371,7 +433,8 @@ class Search_Engine_Search
                 }
             }
         }
-        $excerpt = htmlentities($excerpt,ENT_COMPAT,'UTF-8');
+        if(false!==$encode)
+            $excerpt = htmlentities($excerpt,ENT_COMPAT,get_bloginfo('charset'));
         if ("" == $excerpt) {
             $excerpt = mb_substr($content, 0, $excerpt_length);
             $start = true;
@@ -390,7 +453,7 @@ class Search_Engine_Search
 
         $start_emp_token = "*[/";
         $end_emp_token = "\]*";
-        mb_internal_encoding("UTF-8");
+        mb_internal_encoding(get_bloginfo('charset'));
 
         foreach ($terms as $term)
         {

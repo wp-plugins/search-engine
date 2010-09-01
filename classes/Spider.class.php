@@ -1,11 +1,15 @@
 <?php
-require_once "GetTagData.class.php";
+require_once "Simple.HTML.DOM.Parser.php";
+//require_once "GetTagData.class.php";
 require_once "Index.class.php";
 require_once "API.class.php";
 
 set_time_limit(1200);
 ini_set('memory_limit','64M');
 ignore_user_abort(true);
+
+global $se_message_counter;
+$se_message_counter = 0;
 
 class Search_Engine_Spider
 {
@@ -14,6 +18,7 @@ class Search_Engine_Spider
     var $url = false;
     var $site_id = false;
     var $template_id = false;
+    var $template_path = false;
     var $group_id = false;
 
     var $current_url = false;
@@ -34,6 +39,7 @@ class Search_Engine_Spider
     var $links_notfound = array();
     var $links_servererror = array();
     var $links_other = array();
+    var $links_duplicate = array();
     var $links_current = array();
 
     var $current_depth = -1;
@@ -44,6 +50,7 @@ class Search_Engine_Spider
     var $allowed_hosts = false;
     var $domain_scope = false;
     var $current_host = false;
+    var $cross_scheme = false;
     var $current_scheme = false;
 
     var $robotstxt_check = false;
@@ -83,6 +90,11 @@ class Search_Engine_Spider
         $site = $this->api->get_site(array('id'=>$template['site']));
         $this->url = $site['scheme'].'://'.$site['host'].'/';
         $this->template_id = $template['id'];
+        $this->template_path = $template['directory'];
+        if(!empty($this->template_path))
+            $this->url = rtrim($this->url,'/').$this->template_path;
+        else
+            $this->template_path = false;
         $this->included_uri_words = array_unique(array_filter(array_map('trim',explode(',',$template['whitelist_uri_words']))));
         if(empty($this->included_uri_words))
             $this->included_uri_words = false;
@@ -105,6 +117,11 @@ class Search_Engine_Spider
         $this->domain_scope = $site['host'];
         $this->current_host = $site['host'];
         $this->current_scheme = $site['scheme'];
+        $this->cross_scheme = $template['cross_scheme'];
+        if($this->cross_scheme==1)
+            $this->cross_scheme = true;
+        else
+            $this->cross_scheme = false;
     }
 
     function spider ($url=false,$manual_depth=false)
@@ -188,6 +205,8 @@ class Search_Engine_Spider
         $index = $this->index;
         $this->index = false;
         $this->links_current = $urls;
+        flush();
+        sleep(6); // alleviate the load, output some html on certain servers that don't output as it goes
         $api->update_queue(array('site'=>$this->site_id,'template'=>$this->template_id,'queue'=>json_encode((array)$this)));
         $this->api = $api;
         $this->index = $index;
@@ -218,12 +237,14 @@ class Search_Engine_Spider
             $index = $this->index;
             $this->index = false;
             $this->links_current = array_diff($this->links_current,$this->links_processed);
+            flush();
+            sleep(2); // alleviate the load, output some html on certain servers that don't output as it goes
             $api->update_queue(array('site'=>$this->site_id,'template'=>$this->template_id,'queue'=>json_encode((array)$this)));
             $this->api = $api;
             $this->index = $index;
             $this->queue_counter = 0;
         }
-        $this->message('Crunching URL: '.$url);
+        $this->message('Crunching Next URL: '.$url);
         $this->current_url = $url;
         $parsed = @parse_url($url);
         $this->current_parsed = $parsed;
@@ -241,13 +262,22 @@ class Search_Engine_Spider
         $url_found = $this->get_url($url);
         if($url_found===false||ctype_digit((string)$url_found))
         {
-            $this->message('<strong>URL Not Valid</strong>');
+            $this->message('<strong>Invalid URL</strong>');
             if($url_found===404)
+            {
+                $this->message('<strong>404 Page Not Found:</strong> '.$url);
                 $this->links_notfound[] = $url;
+            }
             elseif(strpos((string)$url_found,'5')!==false&&strpos((string)$url_found,'5')==0)
+            {
+                $this->message('<strong>Server Error '.$url_found.':</strong> '.$url);
                 $this->links_servererror[] = $url;
+            }
             else
+            {
+                $this->message('<strong>Error '.$url_found.':</strong> '.$url);
                 $this->links_other[] = $url;
+            }
             $key = array_search($url,$this->links_queued);
             if($key!==false)
                 unset($this->links_queued[$key]);
@@ -282,7 +312,7 @@ class Search_Engine_Spider
         {
             $this->message('Getting all links from page..');
             $links_found = $this->get_all_links($url);
-            $this->message('Links Found: '.count($links_found));
+            $this->message('New Links Found: '.count($links_found));
             $this->links_queued = array_unique(array_merge($this->links_queued,$links_found));
         }
         else
@@ -292,8 +322,9 @@ class Search_Engine_Spider
         if(strpos($this->meta['robots'],'noindex')===false)
         {
             $this->message('Indexing page..');
-            $this->index($url);
-            $this->links_spidered[] = $url;
+            $indexed = $this->index($url);
+            if($index!==false)
+                $this->links_spidered[] = $url;
         }
         else
         {
@@ -324,13 +355,33 @@ class Search_Engine_Spider
             $keyword_id = $this->api->get_keyword(array('name'=>$keyword));
             $keywords[$keyword_id] = $weight;
         }
-        $index = array('url'=>$this->current_url,'site'=>$this->site_id,'title'=>$this->meta['title'],'description'=>$this->meta['description'],'fulltxt'=>$this->index->content,'lastmod'=>$this->current_last_modified,'size'=>$this->current_size,'md5_checksum'=>$this->current_md5,'level'=>$this->current_depth,'keywords'=>$keywords);
-        $this->api->index_page($index);
-        // update DB with data and progress
+        $check = array('url'=>$this->current_url,'site'=>$this->site_id,'md5_checksum'=>$this->current_md5);
+        $check_md5 = $this->api->md5_page($check);
+        if($check_md5===false||$check_md5['url']!=$this->current_url)
+        {
+            $index = array('url'=>$this->current_url,'site'=>$this->site_id,'title'=>$this->meta['title'],'description'=>$this->meta['description'],'fulltxt'=>$this->index->content,'lastmod'=>$this->current_last_modified,'size'=>$this->current_size,'md5_checksum'=>$this->current_md5,'level'=>$this->current_depth,'keywords'=>$keywords);
+            $this->api->index_page($index);
+            return true;
+        }
+        else
+        {
+            $this->message('<strong>Duplicate Detected!</strong> Another URL has already been indexed with the same content: '.$check_md5['url']);
+            $this->message('<strong>Content is Duplicate - Will not Index</strong>');
+            $this->links_duplicate[] = $url;
+            return false;
+        }
     }
     function message ($msg)
     {
+        global $se_message_counter;
         echo date('m/d/Y h:i:sa').' - '.$msg."<br />\r\n";
+        if($se_message_counter==11)
+        {
+            $se_message_counter==0;
+            flush();
+        }
+        $se_message_counter++;
+
     }
     function get_url ($url,$method=1,$retry=0)
     {
@@ -411,7 +462,7 @@ class Search_Engine_Spider
         {
             if($headers['http_code']==406)
             {
-                $this->message('<strong>Invalid Content-Type</strong> - HTTP Code: '.$headers['http_code'].' / Errno: '.$headers['errno'].' / Errmsg: '.$headers['errmsg']);
+                $this->message('<strong>Unsupported Content-Type</strong> - HTTP Code: '.$headers['http_code'].' / Errno: '.$headers['errno'].' / Errmsg: '.$headers['errmsg']);
                 return 406;
             }
             if(preg_match('/^Content-Type: (.+?)$/m',$headers['header'],$matches))
@@ -419,7 +470,7 @@ class Search_Engine_Spider
                 $content_type = trim($matches[1]);
                 if(strpos($content_type,'text/html')===false)
                 {
-                    $this->message('<strong>Invalid Content-Type</strong>: '.$content_type);
+                    $this->message('<strong>Unsupported Content-Type</strong>: '.$content_type);
                     return 406;
                 }
             }
@@ -595,24 +646,28 @@ class Search_Engine_Spider
                 $this->robotstxt_rules = $rules;
         }
     }
-    function check_url_structure ($url)
+    function check_url_structure ($url,$parsed)
     {
         $invalid_common_extensions = array('3dm','3g2','3gp','7z','8bi','aac','accdb','ai','aif','app','asf','asx','avi','bak','bat','bin','blg','bmp','bup','c','cab','cfg','cgi','com','cpl','cpp','csv','cur','dat','db','dbx','deb','dll','dmg','dmp','doc','docx','drv','drw','dwg','dxf','efx','eps','exe','flv','fnt','fon','gam','gho','gif','gz','hqx','iff','indd','ini','iso','java','jpg','key','keychain','lnk','log','m3u','m4a','m4p','mdb','mid','mim','mov','mp3','mp4','mpa','mpg','mpeg','msg','msi','nes','ori','otf','pages','part','pct','pdb','pdf','pif','pkg','pl','pln','plugin','png','pps','ppt','pptx','prf','ps','psd','psp','qxd','qxp','ra','ram','rar','rels','rm','rom','rtf','sav','sdb','sdf','sit','sitx','sql','svg','swf','sys','tar.gz','thm','tif','tmp','toast','torrent','ttf','txt','uccapilog','uue','vb','vcd','vcf','vob','wav','wks','wma','wmv','wpd','wps','ws','xll','xls','xlsx','xml','yps','zip','zipx');
         $ext = @end(explode('.',$url));
         if($ext!==false&&0<strlen($ext)&&in_array($ext,$invalid_common_extensions))
+        {
+            $this->message('<strong>Non-HTML Content Type</strong>: '.$ext);
+            $this->links_other[] = $url;
             return false;
+        }
         if(strpos($url,'#')!==false&&strpos($url,'#')<1)
+        {
+            $this->message('<strong>URL starts with "#"</strong>: '.$url);
+            $this->links_other[] = $url;
             return false;
-        if(strpos($url,'mailto:')!==false&&strpos($url,'mailto:')<1)
+        }
+        if(strpos($url,':')!==false&&strpos($url,'http://')===false&&strpos($url,'https://')===false)
+        {
+            $this->message('<strong>Non-Standard URL Scheme</strong>: '.$parsed['scheme']);
+            $this->links_other[] = $url;
             return false;
-        if(strpos($url,'feed:')!==false&&strpos($url,'mailto:')<1)
-            return false;
-        if(strpos($url,'gtalk:')!==false&&strpos($url,'gtalk:')<1)
-            return false;
-        if(strpos($url,'aim:')!==false&&strpos($url,'aim:')<1)
-            return false;
-        if(strpos($url,'callto:')!==false&&strpos($url,'callto:')<1)
-            return false;
+        }
         return true;
     }
     function validate_urls ($links)
@@ -626,12 +681,20 @@ class Search_Engine_Spider
                 if(in_array($link,$this->links))
                     continue;
                 $check = @parse_url($link);
-                if(!$this->check_url_structure($link))
+                if(in_array($link,$this->links_other)||in_array($link,$this->links_processed)||in_array($link,$this->links_spidered)||in_array($link,$this->links_excluded)||in_array($link,$this->links_redirected)||in_array($link,$this->links_notfound)||in_array($link,$this->links_servererror)||in_array($link,$this->links_duplicate))
                 {
                     $key = array_search($link,$this->links_queued);
                     if($key!==false)
                         unset($this->links_queued[$key]);
-                    $this->message('<strong>Invalid URL</strong>: '.$link);
+                    continue;
+                }
+                if(!$this->check_url_structure($link,$check))
+                {
+                    $key = array_search($link,$this->links_queued);
+                    if($key!==false)
+                        unset($this->links_queued[$key]);
+                    $this->message('<strong>Skipping URL</strong>: '.$link);
+                    $this->message('<strong>Status Update</strong><ul><li><strong>Links To Be Crunched:</strong> '.count($urls).'</li><li><strong>Links Queued:</strong> '.count($this->links_queued).'</li><li><strong>Links Processed:</strong> '.count($this->links_processed).'</li><li><strong>Links Spidered:</strong> '.count($this->links_spidered).'</li><li><strong>Links Excluded:</strong> '.count($this->links_excluded).'</li><li><strong>Links Redirected:</strong> '.count($this->links_redirected).'</li><li><strong>Links Not Found:</strong> '.count($this->links_notfound).'</li><li><strong>Links With Server Errors:</strong> '.count($this->links_servererror).'</li><li><strong>Links Non-HTML Content Types:</strong> '.count($this->links_other).'</li></ul>');
                     continue;
                 }
                 if(!isset($check['host'])||empty($check['host']))
@@ -687,19 +750,20 @@ class Search_Engine_Spider
 
     function get_all_links ($data)
     {
-        $links = get_tag_data($this->current_data);
+        $links = get_tag_data($this->current_data,array('a','area','link','iframe','frame'));
         $debug = false;
         $ret = array();
         if(!empty($links)) foreach($links as $tag=>$items)
         {
-            foreach($items as $attributes)
+            foreach($items as $item)
             {
                 $link = false;
-                if(($tag=='a'||$tag=='area')&&isset($attributes['href'])&&strpos($attributes['href'],'#')!==0&&strpos($attributes['href'],'javascript:')!==0&&strpos($attributes['href'],'mailto:')!==0)
-                    $link = $attributes['href'];
-                if(($tag=='frame'||$tag=='iframe')&&isset($attributes['src']))
-                    $link = $attributes['src'];
-                                if($debug)var_dump($link);
+                if(($tag=='a'||$tag=='area'||$tag=='link')&&strpos($item,'#')!==0&&strpos($item,'javascript:')!==0&&strpos($item,'mailto:')!==0)
+                    $link = $item;
+                if($tag=='frame'||$tag=='iframe')
+                    $link = $item;
+                if($debug)
+                    var_dump($link);
                 if($link!==false)
                 {
                     $check = @parse_url($link);
@@ -707,11 +771,11 @@ class Search_Engine_Spider
                     {
                         $poscheck = str_replace($this->domain_scope,'',$check['host']);
                         if(strpos($check['host'],$this->domain_scope)===(strlen($check['host'])-strlen($this->domain_scope)))
-                            if(!in_array($link,$this->links))
+                            if(!in_array($link,$this->links)&&!empty($check['path']))
                                 $ret[] = $link;
                     }
                     else
-                        if(!in_array($link,$this->links))
+                        if(!in_array($link,$this->links)&&!empty($check['path']))
                             $ret[] = $link;
                 }
             }
@@ -720,17 +784,52 @@ class Search_Engine_Spider
     }
     function get_meta_data ($data)
     {
-        $meta = get_tag_data($this->current_data,array('meta','title','h1','h2'));
-        $ret = array('title'=>false,'robots'=>false,'description'=>false,'keywords'=>false,'h1'=>false,'h2'=>false);
+        $meta = get_tag_data($this->current_data,array('meta','title'),true);
+        $headings = get_tag_data($this->current_data,array('h1','h2','h3'));
+        $ret = array('title'=>false,'robots'=>false,'description'=>false,'keywords'=>false,'h1'=>false,'h2'=>false,'h3'=>false);
         if(!empty($meta)) foreach($meta as $tag=>$items)
         {
+            if(empty($tag))
+                continue;
+            if($ret[$tag]===false)
+                $ret[$tag] = array();
             foreach($items as $attributes)
             {
-                if($tag!='meta'&&isset($ret[$tag])&&$ret[$tag]===false&&isset($attributes['html']))
-                    $ret[$tag] = strip_tags($attributes['html']);
-                if($tag=='meta'&&isset($ret[$attributes['name']])&&$ret[$attributes['name']]===false&&isset($attributes['name'])&&isset($attributes['content']))
-                    $ret[$attributes['name']] = $attributes['content'];
+                if(is_array($attributes))
+                {
+                    if($tag=='meta')
+                    {
+                        if(isset($ret[$attributes['name']])&&!empty($attributes['content']))
+                            $ret[$tag][] = $attributes['content'];
+                    }
+                    else
+                        $ret[$tag][] = strip_tags($attributes['html']);
+                }
+                else
+                    $ret[$tag][] = $attributes;
             }
+            $ret[$tag] = array_filter((array)$ret[$tag]);
+            if(!empty($ret[$tag]))
+                $ret[$tag] = implode(' ',$ret[$tag]);
+            else
+                $ret[$tag]= false;
+        }
+        if(!empty($headings)) foreach($headings as $tag=>$items)
+        {
+            if($ret[$tag]===false)
+                $ret[$tag] = array();
+            foreach($items as $attributes)
+            {
+                if(is_array($attributes))
+                    $ret[$tag][] = $attributes['content'];
+                else
+                    $ret[$tag][] = $attributes;
+            }
+            $ret[$tag] = array_filter((array)$ret[$tag]);
+            if(!empty($ret[$tag]))
+                $ret[$tag] = implode(' ',$ret[$tag]);
+            else
+                $ret[$tag]= false;
         }
         return $ret;
     }

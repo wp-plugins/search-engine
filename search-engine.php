@@ -3,7 +3,7 @@
 Plugin Name: Search Engine
 Plugin URI: http://www.scottkclark.com/wordpress/search-engine/
 Description: THIS IS A BETA VERSION - Currently in development - A search engine for WordPress that indexes ALL of your site and provides comprehensive search.
-Version: 0.5.0
+Version: 0.5.1
 Author: Scott Kingsley Clark
 Author URI: http://www.scottkclark.com/
 
@@ -24,21 +24,22 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 global $wpdb;
 define('SEARCH_ENGINE_TBL',$wpdb->prefix.'searchengine_');
-define('SEARCH_ENGINE_VERSION','050');
+define('SEARCH_ENGINE_VERSION','051');
 define('SEARCH_ENGINE_URL', WP_PLUGIN_URL . '/search-engine');
 define('SEARCH_ENGINE_DIR', WP_PLUGIN_DIR . '/search-engine');
+define('SEARCH_ENGINE_XML_SITEMAPS_DIR',WP_CONTENT_DIR.'/xml-sitemaps');
 
 function search_engine_init ()
 {
     global $current_user,$wpdb;
     $capabilities = search_engine_capabilities();
     // check version
-    $version = get_option('search_engine_version');
+    $version = (int)get_option('search_engine_version');
     if(empty($version))
     {
         // thx pods ;)
         $sql = file_get_contents(SEARCH_ENGINE_DIR.'/assets/dump.sql');
-        $sql_explode = preg_split("/;\n/", str_replace('wp_', $wpdb->prefix, $sql));
+        $sql_explode = preg_split("/;\n/", str_replace('DEFAULT CHARSET=utf8','DEFAULT CHARSET='.DB_CHARSET,str_replace('wp_',$wpdb->prefix,$sql)));
         if(count($sql_explode)==1)
             $sql_explode = preg_split("/;\r/", str_replace('wp_', $wpdb->prefix, $sql));
         for ($i = 0, $z = count($sql_explode); $i < $z; $i++)
@@ -51,8 +52,11 @@ function search_engine_init ()
     elseif($version!=SEARCH_ENGINE_VERSION)
     {
         if($version<50)
+            $wpdb->query("CREATE TABLE `".SEARCH_ENGINE_TBL."queue` (`id` int(10) NOT NULL AUTO_INCREMENT, `site` int(10) NOT NULL, `template` int(10) NOT NULL, `added` datetime NOT NULL, `updated` datetime NOT NULL, `queue` longtext NOT NULL, PRIMARY KEY (`id`)) DEFAULT CHARSET=".DB_CHARSET);
+        if($version<51)
         {
-            $wpdb->query("CREATE TABLE `".SEARCH_ENGINE_TBL."queue` (`id` int(10) NOT NULL AUTO_INCREMENT, `site` int(10) NOT NULL, `template` int(10) NOT NULL, `added` datetime NOT NULL, `updated` datetime NOT NULL, `queue` longtext COLLATE utf8_unicode_ci NOT NULL, PRIMARY KEY (`id`))");
+            $wpdb->query("ALTER TABLE `".SEARCH_ENGINE_TBL."templates` ADD COLUMN `cross_scheme` INT unsigned AFTER `max_depth`");
+            $wpdb->query("ALTER TABLE `".SEARCH_ENGINE_TBL."queue` ADD COLUMN `shutdown` INT unsigned AFTER `template`");
         }
         delete_option('search_engine_version');
         add_option('search_engine_version',SEARCH_ENGINE_VERSION);
@@ -67,9 +71,7 @@ function search_engine_init ()
         {
             $role = get_role("administrator");
             foreach($capabilities as $cap)
-            {
                 $role->add_cap($cap);
-            }
         }
     }
     else
@@ -119,25 +121,27 @@ function search_engine_menu ()
     if(empty($min_cap))
         $min_cap = 'search_engine_full_access';
     $templates = @count($wpdb->get_results('SELECT id FROM '.SEARCH_ENGINE_TBL.'templates LIMIT 1'));
+    $sites = @count($wpdb->get_results('SELECT id FROM '.SEARCH_ENGINE_TBL.'sites LIMIT 1'));
+    $logs = @count($wpdb->get_results('SELECT id FROM '.SEARCH_ENGINE_TBL.'log LIMIT 1'));
     add_menu_page('Search Engine', 'Search Engine', $has_full_access ? 'read' : $min_cap, 'search-engine', null, SEARCH_ENGINE_URL.'/assets/icons/search_16.png');
     add_submenu_page('search-engine', 'Wizard', 'Wizard', $has_full_access ? 'read' : 'search_engine_index', 'search-engine', 'search_engine_wizard');
     if(0<$templates)
         add_submenu_page('search-engine', 'Index Templates', 'Index Templates', $has_full_access ? 'read' : 'search_engine_index_templates', 'search-engine-index-templates', 'search_engine_index_templates');
+    if(0<$sites)
+        add_submenu_page('search-engine', 'XML Sitemaps', 'XML Sitemaps', $has_full_access ? 'read' : 'search_engine_view_indexmaps', 'search-engine-xml-sitemaps', 'search_engine_xml_sitemaps');
     /* COMING SOON! :-)
-    add_submenu_page('search-engine', 'XML Sitemaps', 'XML Sitemaps', $has_full_access ? 'read' : 'search_engine_view_indexmaps', 'search-engine-xml-sitemaps', 'search_engine_xml_sitemaps');
     add_submenu_page('search-engine', 'Groups', 'Groups', $has_full_access ? 'read' : 'search_engine_groups', 'search-engine-groups', 'search_engine_groups');
     add_submenu_page('search-engine', 'View Index', 'View Index', $has_full_access ? 'read' : 'search_engine_view_index', 'search-engine-view-index', 'search_engine_view_index');
     */
-    add_submenu_page('search-engine', 'View  Search Logs', 'View Search Logs', $has_full_access ? 'read' : 'search_engine_logs', 'search-engine-logs', 'search_engine_logs');
+    if(0<$logs)
+        add_submenu_page('search-engine', 'View  Search Logs', 'View Search Logs', $has_full_access ? 'read' : 'search_engine_logs', 'search-engine-logs', 'search_engine_logs');
     add_submenu_page('search-engine', 'Settings', 'Settings', $has_full_access ? 'read' : 'search_engine_settings', 'search-engine-settings', 'search_engine_settings');
     add_submenu_page('search-engine', 'About', 'About', $has_full_access ? 'read' : $min_cap, 'search-engine-about', 'search_engine_about');
 }
 function search_engine_wizard ()
 {
     if(isset($_GET['action'])&&$_GET['action']=='run')
-    {
         search_engine_wizard_run();
-    }
     else
     {
 ?>
@@ -149,35 +153,67 @@ function search_engine_wizard ()
     <table class="form-table">
 <?php
     global $wpdb;
-    $data = $wpdb->get_results('SELECT id,host,scheme FROM '.SEARCH_ENGINE_TBL.'sites',ARRAY_A);
-    $existing = array();
-    $selected = false;
+    $data = $wpdb->get_results('SELECT id,host,scheme FROM '.SEARCH_ENGINE_TBL.'sites ORDER BY CONCAT(scheme,"://",host)',ARRAY_A);
+    $data_index = $wpdb->get_results('SELECT t.id,t.site,s.scheme,s.host,t.directory FROM '.SEARCH_ENGINE_TBL.'templates AS t LEFT JOIN '.SEARCH_ENGINE_TBL.'sites AS s ON s.id=t.site ORDER BY CONCAT(s.scheme,"://",s.host,t.directory)',ARRAY_A);
+    $existing = $existing_indexes = array();
+    $selected = $selected_index = false;
     if(!empty($data)) foreach($data as $row)
     {
         $existing[$row['id']] = $row['scheme'].'://'.$row['host'];
-        if($existing[$row['id']]==get_bloginfo('wpurl')&&!isset($_GET['site_id']))
+        if($existing[$row['id']]==get_bloginfo('wpurl')||strpos($existing[$row['id']],get_bloginfo('wpurl'))!==false)
             $selected = $row['id'];
-        elseif(isset($_GET['site_id'])&&$row['id']==$_GET['site_id'])
+        elseif($row['id']==$obj->row['site']&&$create==0)
             $selected = $row['id'];
     }
-    if($selected===false)
+    if(!empty($data_index)) foreach($data_index as $row)
+    {
+        $existing_indexes[$row['id']] = $row['scheme'].'://'.$row['host'].$row['directory'];
+        if($existing_indexes[$row['id']]==get_bloginfo('wpurl')||strpos($existing_indexes[$row['id']],get_bloginfo('wpurl'))!==false)
+            $selected_index = $row['id'];
+        elseif($row['site']==$obj->row['site']&&$create==0)
+            $selected_index = $row['id'];
+    }
+    if($selected_index!==false)
+        $selected = false;
+    if($selected===false&&$selected_index===false)
     {
 ?>
         <tr valign="top">
             <th scope="row"><label for="site_url">Index a New Site</label></th>
             <td>
-                <input name="site_url" type="text" id="site_url" value="<?php bloginfo('wpurl'); ?>" class="regular-text"<?php if(!empty($existing)) { ?> onchange="jQuery('#existing_site').val(0);" onblur="jQuery('#existing_site').val((jQuery('#site_url').val()!=''?0:jQuery('#existing_site').val()));"<?php } ?> />
+                <input name="site_url" type="text" id="site_url" value="<?php bloginfo('wpurl'); ?>" class="regular-text"<?php if(!empty($existing)) { ?> onchange="jQuery('#existing_site').val(0);jQuery('#existing_template').val(0);" onblur="jQuery('#existing_site').val((jQuery('#site_url').val()!=''?0:jQuery('#existing_site').val()));jQuery('#existing_template').val((jQuery('#site_url').val()!=''?0:jQuery('#existing_template').val()));"<?php } ?> />
                 <span class="description">(Ex. http://www.yoursite.com or www.yoursite.com)</span>
             </td>
         </tr>
 <?php
+        if(!empty($existing_indexes))
+        {
+?>
+        <tr valign="top">
+            <th scope="row"><label for="existing_template">or Reindex a Site</label></th>
+            <td>
+                <select name="existing_template" id="existing_template" onchange="jQuery('#site_url').val((jQuery('#existing_template').val()==0?jQuery('#site_url').val():''));jQuery('#existing_site').val((jQuery('#existing_template').val()==0?jQuery('#existing_site').val():0));">
+                    <option value="0" SELECTED>-- Select One --</option>
+<?php
+            foreach($existing_indexes as $id => $site)
+            {
+?>
+                    <option value="<?php echo $id; ?>"><?php echo $site; ?>&nbsp;&nbsp;</option>
+<?php
+            }
+?>
+                </select>
+            </td>
+        </tr>
+<?php
+        }
         if(!empty($existing))
         {
 ?>
         <tr valign="top">
-            <th scope="row"><label for="existing_site">or Index an Existing Site</label></th>
+            <th scope="row"><label for="existing_site">or Configure a New Index of an Existing Site</label></th>
             <td>
-                <select name="existing_site" id="existing_site" onchange="jQuery('#site_url').val((jQuery('#existing_site').val()==0?jQuery('#site_url').val():''));">
+                <select name="existing_site" id="existing_site" onchange="jQuery('#site_url').val((jQuery('#existing_site').val()==0?jQuery('#site_url').val():''));jQuery('#existing_template').val((jQuery('#existing_site').val()==0?jQuery('#existing_template').val():0));">
                     <option value="0" SELECTED>-- Select One --</option>
 <?php
             foreach($existing as $id => $site)
@@ -195,12 +231,33 @@ function search_engine_wizard ()
     }
     else
     {
+        if(!empty($existing_indexes))
+        {
 ?>
         <tr valign="top">
-            <th scope="row"><label for="existing_site">Index an Existing Site</label></th>
+            <th scope="row"><label for="existing_template">Reindex a Site</label></th>
             <td>
-                <select name="existing_site" id="existing_site" onchange="jQuery('#site_url').val((jQuery('#existing_site').val()==0?jQuery('#site_url').val():''));">
-                    <option value="0">Index a New Site</option>
+                <select name="existing_template" id="existing_template" onchange="jQuery('#site_url').val((jQuery('#existing_template').val()==0?jQuery('#site_url').val():''));jQuery('#existing_site').val((jQuery('#existing_template').val()==0?jQuery('#existing_site').val():0));">
+                    <option value="0">-- Select One --</option>
+<?php
+            foreach($existing_indexes as $id => $site)
+            {
+?>
+                    <option value="<?php echo $id; ?>"<?php echo ($selected_index==$id?' SELECTED':''); ?>><?php echo $site; ?>&nbsp;&nbsp;</option>
+<?php
+            }
+?>
+                </select>
+            </td>
+        </tr>
+<?php
+        }
+?>
+        <tr valign="top">
+            <th scope="row"><label for="existing_site"><?php echo (!empty($existing_indexes))?'or ':''; ?>Configure a New Index of an Existing Site</label></th>
+            <td>
+                <select name="existing_site" id="existing_site" onchange="jQuery('#site_url').val((jQuery('#existing_site').val()==0?jQuery('#site_url').val():''));jQuery('#existing_template').val((jQuery('#existing_site').val()==0?jQuery('#existing_template').val():0));">
+                    <option value="0">-- Select One --</option>
 <?php
         foreach($existing as $id => $site)
         {
@@ -215,7 +272,7 @@ function search_engine_wizard ()
         <tr valign="top">
             <th scope="row"><label for="site_url">or Index a New Site</label></th>
             <td>
-                <input name="site_url" type="text" id="site_url" value="" class="regular-text" onchange="jQuery('#existing_site').val(0);" onblur="jQuery('#existing_site').val((jQuery('#site_url').val()!=''?0:jQuery('#existing_site').val()));" />
+                <input name="site_url" type="text" id="site_url" value="" class="regular-text"<?php if(!empty($existing)) { ?> onchange="jQuery('#existing_site').val(0);jQuery('#existing_template').val(0);" onblur="jQuery('#existing_site').val((jQuery('#site_url').val()!=''?0:jQuery('#existing_site').val()));jQuery('#existing_template').val((jQuery('#site_url').val()!=''?0:jQuery('#existing_template').val()));"<?php } ?> />
                 <span class="description">Enter the URL of the site<br />(Ex. http://www.yoursite.com or www.yoursite.com)</span>
             </td>
         </tr>
@@ -235,7 +292,14 @@ function search_engine_wizard ()
                 <th scope="row"><label for="max_depth">Maximum Link Depth</label></th>
                 <td>
                     <input name="max_depth" type="text" id="max_depth" value="0" class="small-text" />
-                    <span class="description">This is the max number of  levels the search engine will crawl into your site. Enter 0 for no limit. This is not the same as the URL levels (www.mysite.com/level-1/level-2/level-3/). Levels are when the Spider crawls</span>
+                    <span class="description">This is the max number of levels the search engine will crawl into your site. Enter 0 for no limit. This is not the same as the URL levels (www.mysite.com/level-1/level-2/level-3/). Levels are when the Spider crawls</span>
+                </td>
+            </tr>
+            <tr valign="top">
+                <th scope="row"><label for="cross_scheme">Index Across Schemes</label></th>
+                <td>
+                    <input name="cross_scheme" type="checkbox" id="cross_scheme" value="1" class="small-text" />
+                    <span class="description">By default when spidering, only links that are within the same 'http://' or 'https://' scheme as the site above will be indexed. Check this box to allow indexing of both 'http://' and 'https://' for the site</span>
                 </td>
             </tr>
             <tr valign="top">
@@ -300,17 +364,22 @@ function search_engine_wizard_run ()
         update_option('search_engine_token',$token);
     }
     require_once SEARCH_ENGINE_DIR.'/classes/API.class.php';
+    $created = false;
     if(!empty($_POST))
     {
+        $url = '';
         if(!empty($_POST['site_url']))
         {
             $api = new Search_Engine_API();
             $parsed = parse_url($_POST['site_url']);
+            $url = $_POST['site_url'];
             if(!isset($parsed['host']))
             {
-                $parsed['scheme'] = 'http';
-                $parsed['host'] = $_POST['site_url'];
+                $parsed = parse_url('http://'.$_POST['site_url']);
+                $url = 'http://'.$_POST['site_url'];
             }
+            if($parsed===false||empty($parsed))
+                die('<strong>Error:</strong> Invalid URL entered');
             $site = $api->get_site(array('host'=>$parsed['host'],'scheme'=>$parsed['scheme']));
             if($site===false)
             {
@@ -321,29 +390,43 @@ function search_engine_wizard_run ()
                 $site_id = $site['id'];
             }
         }
-        else
+        elseif(!empty($_POST['existing_template']))
+        {
+            $template_id = $_POST['existing_template'];
+        }
+        elseif(!empty($_POST['existing_site']))
         {
             $site_id = $_POST['existing_site'];
         }
-        $_POST['site'] = $site_id;
-        require_once SEARCH_ENGINE_DIR.'/wp-admin-ui/Admin.class.php';
-        $columns = array('site'=>array('custom_relate'=>array('table'=>SEARCH_ENGINE_TBL.'sites','what'=>'host')),'indexed'=>array('label'=>'Date Indexed','type'=>'date'),'updated'=>array('label'=>'Last Modified','type'=>'date'),'id'=>array('label'=>'Template ID'));
-        $form_columns = $columns;
-        unset($form_columns['id']);
-        unset($form_columns['indexed']);
-        $form_columns['updated']['update'] = true;
-        $form_columns['updated']['display'] = false;
-        //$form_columns[] = 'group';
-        $form_columns[] = 'directory';
-        $form_columns[] = 'max_depth';
-        $form_columns[] = 'blacklist_words';
-        $form_columns[] = 'blacklist_uri_words';
-        $form_columns[] = 'whitelist_uri_words';
-        $form_columns[] = 'htaccess_username';
-        $form_columns[] = 'htaccess_password';
-        $admin = new WP_Admin_UI(array('do'=>'create','item'=>'Index Template','items'=>'Index Templates','table'=>SEARCH_ENGINE_TBL.'templates','columns'=>$columns,'form_columns'=>$form_columns,'icon'=>SEARCH_ENGINE_URL.'/assets/icons/search_32.png','custom'=>array('form'=>'search_engine_index_form','action_end_view'=>'search_engine_index_run','header'=>'search_engine_index_header')));
-        $admin->go();
-        $template_id = $admin->insert_id;
+        if($template_id==0&&$site_id>0)
+        {
+            $_POST['site'] = $site_id;
+            if(empty($parsed))
+                $parsed = parse_url($url);
+            if(!isset($_POST['cross_scheme'])||empty($_POST['cross_scheme']))
+                $_POST['cross_scheme'] = 0;
+            $_POST['directory'] = $parsed['path'];
+            require_once SEARCH_ENGINE_DIR.'/wp-admin-ui/Admin.class.php';
+            $columns = array('site'=>array('custom_relate'=>array('table'=>SEARCH_ENGINE_TBL.'sites','what'=>'host')),'indexed'=>array('label'=>'Last Indexed','type'=>'date'),'updated'=>array('label'=>'Last Modified','type'=>'date'),'id'=>array('label'=>'Template ID'));
+            $form_columns = $columns;
+            unset($form_columns['id']);
+            unset($form_columns['indexed']);
+            $form_columns['updated']['date_touch'] = true;
+            $form_columns['updated']['display'] = false;
+            //$form_columns[] = 'group';
+            $form_columns[] = 'directory';
+            $form_columns[] = 'max_depth';
+            $form_columns[] = 'cross_scheme';
+            $form_columns[] = 'blacklist_words';
+            $form_columns[] = 'blacklist_uri_words';
+            $form_columns[] = 'whitelist_uri_words';
+            $form_columns[] = 'htaccess_username';
+            $form_columns[] = 'htaccess_password';
+            $admin = new WP_Admin_UI(array('api'=>true,'do'=>'create','item'=>'Index Template','items'=>'Index Templates','table'=>SEARCH_ENGINE_TBL.'templates','columns'=>$columns,'form_columns'=>$form_columns,'icon'=>SEARCH_ENGINE_URL.'/assets/icons/search_32.png','custom'=>array('form'=>'search_engine_index_form','action_end_view'=>'search_engine_index_run','header'=>'search_engine_index_header')));
+            $admin->go();
+            $template_id = $admin->insert_id;
+        }
+        $created = true;
     }
     global $wpdb;
     if(isset($_GET['site_id']))
@@ -354,6 +437,19 @@ function search_engine_wizard_run ()
 <div class="wrap">
     <div id="icon-edit-pages" class="icon32" style="background-position:0 0;background-image:url(<?php echo SEARCH_ENGINE_URL; ?>/assets/icons/search_32.png);"><br /></div>
     <h2>Search Engine - Easy Indexing Wizard</h2>
+<?php
+    if($template_id==0)
+        die('<strong>Error:</strong> Invalid Template');
+    if($created!==false)
+    {
+?>
+    <script type="text/javascript">
+        document.location = 'admin.php?page=search-engine&action=run&template_id=<?php echo $template_id; ?>';
+    </script>
+<?php
+        die();
+    }
+?>
     <div style="height:20px;"></div>
     <p>Please wait while your site is spidered and indexed.</p>
     <p class="submit">
@@ -377,6 +473,7 @@ function search_engine_wizard_run ()
             <p id="startstop"><span class="startstop stop">[<a href="#" onclick="clearTimeout(t);jQuery('.startstop').toggle();return false;">pause autoscrolling</a>]</span><span class="startstop">[<a href="#" onclick="t = setTimeout('tothetop()',1000);jQuery('.startstop').toggle();return false;">resume autoscrolling</a>]</span></p>
             <div class="loader"></div>
         </div>
+        <p><em>To automatically run this on your server via a Cronjob, use the following URL:<br /><input type="text" value="<?php echo SEARCH_ENGINE_URL; ?>/cronjob.php?<?php echo ($site_id>0)?'site_id='.$site_id.'&':''; ?>template_id=<?php echo $template_id; ?>&token=<?php echo $token; ?>" style="width:100%;" /></em></p>
     </div>
 </div>
 <?php
@@ -392,36 +489,17 @@ function search_engine_index_templates ()
             $parsed = parse_url($_POST['site_url']);
             $site = $api->get_site(array('host'=>$parsed['host'],'scheme'=>$parsed['scheme']));
             if($site===false)
-            {
                 $site_id = $api->save_site(array('host'=>$parsed['host'],'scheme'=>$parsed['scheme'],'group'=>0));
-            }
             else
-            {
                 $site_id = $site['id'];
-            }
         }
         else
-        {
             $site_id = $_POST['existing_site'];
-        }
         $_POST['site'] = $site_id;
     }
     require_once SEARCH_ENGINE_DIR.'/wp-admin-ui/Admin.class.php';
-    $columns = array('site'=>array('custom_relate'=>array('table'=>SEARCH_ENGINE_TBL.'sites','what'=>'host','is'=>'site')),'indexed'=>array('label'=>'Date Indexed','type'=>'date'),'updated'=>array('label'=>'Last Modified','type'=>'date'),'id'=>array('label'=>'Template ID'));
-    $form_columns = $columns;
-    unset($form_columns['id']);
-    unset($form_columns['indexed']);
-    $form_columns['updated']['update'] = true;
-    $form_columns['updated']['display'] = false;
-    //$form_columns[] = 'group';
-    $form_columns[] = 'directory';
-    $form_columns[] = 'max_depth';
-    $form_columns[] = 'blacklist_words';
-    $form_columns[] = 'blacklist_uri_words';
-    $form_columns[] = 'whitelist_uri_words';
-    $form_columns[] = 'htaccess_username';
-    $form_columns[] = 'htaccess_password';
-    $admin = new WP_Admin_UI(array('item'=>'Index Template','items'=>'Index Templates','table'=>SEARCH_ENGINE_TBL.'templates','columns'=>$columns,'form_columns'=>$form_columns,'icon'=>SEARCH_ENGINE_URL.'/assets/icons/search_32.png','custom'=>array('form'=>'search_engine_index_form','action_end_view'=>'search_engine_index_run','header'=>'search_engine_index_header')));
+    $columns = array('site'=>array('custom_relate'=>array('table'=>SEARCH_ENGINE_TBL.'sites','what'=>'host','is'=>'site')),'indexed'=>array('label'=>'Last Indexed','type'=>'date'),'updated'=>array('label'=>'Last Modified','type'=>'date'),'id'=>array('label'=>'Template ID'));
+    $admin = new WP_Admin_UI(array('item'=>'Index Template','items'=>'Index Templates','table'=>SEARCH_ENGINE_TBL.'templates','columns'=>$columns,'icon'=>SEARCH_ENGINE_URL.'/assets/icons/search_32.png','custom'=>array('action_end_view'=>'search_engine_index_run','header'=>'search_engine_index_header','reindex'=>array('label'=>'Reindex','link'=>'admin.php?page=search-engine&action=run&template_id={@id}')),'edit'=>false,'save'=>false,'add'=>false));
     $admin->go();
 ?>
 <?php
@@ -453,7 +531,7 @@ function search_engine_index_form ($obj,$create=0)
     }
     else
     {
-        $obj->row = array('max_depth'=>'','blacklist_words'=>'','blacklist_uri_words'=>'','whitelist_uri_words'=>'','htaccess_username'=>'','htaccess_password'=>'');
+        $obj->row = array('max_depth'=>'','scheme'=>'','blacklist_words'=>'','blacklist_uri_words'=>'','whitelist_uri_words'=>'','htaccess_username'=>'','htaccess_password'=>'');
     }
  ?>
     <div style="height:20px;"></div>
@@ -461,9 +539,10 @@ function search_engine_index_form ($obj,$create=0)
     <table class="form-table">
 <?php
     global $wpdb;
-    $data = $wpdb->get_results('SELECT id,host,scheme FROM '.SEARCH_ENGINE_TBL.'sites',ARRAY_A);
-    $existing = array();
-    $selected = false;
+    $data = $wpdb->get_results('SELECT id,host,scheme FROM '.SEARCH_ENGINE_TBL.'sites ORDER BY CONCAT(scheme,"://",host)',ARRAY_A);
+    $data_index = $wpdb->get_results('SELECT t.id,t.site,s.scheme,s.host,t.directory FROM '.SEARCH_ENGINE_TBL.'templates AS t LEFT JOIN '.SEARCH_ENGINE_TBL.'sites AS s ON s.id=t.site ORDER BY CONCAT(s.scheme,"://",s.host,t.directory)',ARRAY_A);
+    $existing = $existing_indexes = array();
+    $selected = $selected_index = false;
     if(!empty($data)) foreach($data as $row)
     {
         $existing[$row['id']] = $row['scheme'].'://'.$row['host'];
@@ -472,24 +551,55 @@ function search_engine_index_form ($obj,$create=0)
         elseif($row['id']==$obj->row['site']&&$create==0)
             $selected = $row['id'];
     }
-    if($selected===false)
+    if(!empty($data_index)) foreach($data_index as $row)
+    {
+        $existing_indexes[$row['id']] = $row['scheme'].'://'.$row['host'].$row['directory'];
+        if(($existing_indexes[$row['id']]==get_bloginfo('wpurl')||strpos($existing_indexes[$row['id']],get_bloginfo('wpurl'))!==false)&&$create==1)
+            $selected_index = $row['id'];
+        elseif($row['site']==$obj->row['site']&&$create==0)
+            $selected_index = $row['id'];
+    }
+    if($selected_index!==false)
+        $selected = false;
+    if($selected===false&&$selected_index===false)
     {
 ?>
         <tr valign="top">
             <th scope="row"><label for="site_url">Index a New Site</label></th>
             <td>
-                <input name="site_url" type="text" id="site_url" value="<?php bloginfo('wpurl'); ?>" class="regular-text"<?php if(!empty($existing)) { ?> onchange="jQuery('#existing_site').val(0);" onblur="jQuery('#existing_site').val((jQuery('#site_url').val()!=''?0:jQuery('#existing_site').val()));"<?php } ?> />
+                <input name="site_url" type="text" id="site_url" value="<?php bloginfo('wpurl'); ?>" class="regular-text"<?php if(!empty($existing)) { ?> onchange="jQuery('#existing_site').val(0);jQuery('#existing_template').val(0);" onblur="jQuery('#existing_site').val((jQuery('#site_url').val()!=''?0:jQuery('#existing_site').val()));jQuery('#existing_template').val((jQuery('#site_url').val()!=''?0:jQuery('#existing_template').val()));"<?php } ?> />
                 <span class="description">(Ex. http://www.yoursite.com or www.yoursite.com)</span>
             </td>
         </tr>
 <?php
+        if(!empty($existing_indexes))
+        {
+?>
+        <tr valign="top">
+            <th scope="row"><label for="existing_template">or Reindex a Site</label></th>
+            <td>
+                <select name="existing_template" id="existing_template" onchange="jQuery('#site_url').val((jQuery('#existing_template').val()==0?jQuery('#site_url').val():''));jQuery('#existing_site').val((jQuery('#existing_template').val()==0?jQuery('#existing_site').val():0));">
+                    <option value="0" SELECTED>-- Select One --</option>
+<?php
+            foreach($existing_indexes as $id => $site)
+            {
+?>
+                    <option value="<?php echo $id; ?>"><?php echo $site; ?>&nbsp;&nbsp;</option>
+<?php
+            }
+?>
+                </select>
+            </td>
+        </tr>
+<?php
+        }
         if(!empty($existing))
         {
 ?>
         <tr valign="top">
-            <th scope="row"><label for="existing_site">or Index an Existing Site</label></th>
+            <th scope="row"><label for="existing_site">or Configure a New Index of an Existing Site</label></th>
             <td>
-                <select name="existing_site" id="existing_site" onchange="jQuery('#site_url').val((jQuery('#existing_site').val()==0?jQuery('#site_url').val():''));">
+                <select name="existing_site" id="existing_site" onchange="jQuery('#site_url').val((jQuery('#existing_site').val()==0?jQuery('#site_url').val():''));jQuery('#existing_template').val((jQuery('#existing_site').val()==0?jQuery('#existing_template').val():0));">
                     <option value="0" SELECTED>-- Select One --</option>
 <?php
             foreach($existing as $id => $site)
@@ -507,12 +617,33 @@ function search_engine_index_form ($obj,$create=0)
     }
     else
     {
+        if(!empty($existing_indexes))
+        {
 ?>
         <tr valign="top">
-            <th scope="row"><label for="existing_site">Index an Existing Site</label></th>
+            <th scope="row"><label for="existing_template">Reindex a Site</label></th>
             <td>
-                <select name="existing_site" id="existing_site" onchange="jQuery('#site_url').val((jQuery('#existing_site').val()==0?jQuery('#site_url').val():''));">
-                    <option value="0">Index a New Site</option>
+                <select name="existing_template" id="existing_template" onchange="jQuery('#site_url').val((jQuery('#existing_template').val()==0?jQuery('#site_url').val():''));jQuery('#existing_site').val((jQuery('#existing_template').val()==0?jQuery('#existing_site').val():0));">
+                    <option value="0">-- Select One --</option>
+<?php
+            foreach($existing_indexes as $id => $site)
+            {
+?>
+                    <option value="<?php echo $id; ?>"<?php echo ($selected_index==$id?' SELECTED':''); ?>><?php echo $site; ?>&nbsp;&nbsp;</option>
+<?php
+            }
+?>
+                </select>
+            </td>
+        </tr>
+<?php
+        }
+?>
+        <tr valign="top">
+            <th scope="row"><label for="existing_site"><?php echo (!empty($existing_indexes))?'or ':''; ?>Configure a New Index of an Existing Site</label></th>
+            <td>
+                <select name="existing_site" id="existing_site" onchange="jQuery('#site_url').val((jQuery('#existing_site').val()==0?jQuery('#site_url').val():''));jQuery('#existing_template').val((jQuery('#existing_site').val()==0?jQuery('#existing_template').val():0));">
+                    <option value="0">-- Select One --</option>
 <?php
         foreach($existing as $id => $site)
         {
@@ -527,7 +658,7 @@ function search_engine_index_form ($obj,$create=0)
         <tr valign="top">
             <th scope="row"><label for="site_url">or Index a New Site</label></th>
             <td>
-                <input name="site_url" type="text" id="site_url" value="" class="regular-text" onchange="jQuery('#existing_site').val(0);" onblur="jQuery('#existing_site').val((jQuery('#site_url').val()!=''?0:jQuery('#existing_site').val()));" />
+                <input name="site_url" type="text" id="site_url" value="" class="regular-text"<?php if(!empty($existing)) { ?> onchange="jQuery('#existing_site').val(0);jQuery('#existing_template').val(0);" onblur="jQuery('#existing_site').val((jQuery('#site_url').val()!=''?0:jQuery('#existing_site').val()));jQuery('#existing_template').val((jQuery('#site_url').val()!=''?0:jQuery('#existing_template').val()));"<?php } ?> />
                 <span class="description">Enter the URL of the site<br />(Ex. http://www.yoursite.com or www.yoursite.com)</span>
             </td>
         </tr>
@@ -548,6 +679,13 @@ function search_engine_index_form ($obj,$create=0)
                 <td>
                     <input name="max_depth" type="text" id="max_depth" value="<?php echo $obj->row['max_depth']; ?>" class="small-text" />
                     <span class="description">This is the max number of  levels the search engine will crawl into your site. Enter 0 for no limit. This is not the same as the URL levels (www.mysite.com/level-1/level-2/level-3/). Levels are when the Spider crawls</span>
+                </td>
+            </tr>
+            <tr valign="top">
+                <th scope="row"><label for="cross_scheme">Index Across Schemes</label></th>
+                <td>
+                    <input name="cross_scheme" type="checkbox" id="cross_scheme" value="1" class="small-text"<?php echo ($obj->row['cross_scheme']==1?' CHECKED':''); ?> />
+                    <span class="description">By default when spidering, only links that are within the same 'http://' or 'https://' scheme as the site above will be indexed. Check this box to allow indexing of both 'http://' and 'https://' for the site</span>
                 </td>
             </tr>
             <tr valign="top">
@@ -591,14 +729,21 @@ function search_engine_index_form ($obj,$create=0)
 </form>
 <?php
 }
+function search_engine_xml_sitemaps ()
+{
+    require_once SEARCH_ENGINE_DIR.'/wp-admin-ui/Admin.class.php';
+    $columns = array('host'=>array('label'=>'Site'),'indexed'=>array('label'=>'Last Indexed','type'=>'date'),'updated'=>array('label'=>'Last Modified','type'=>'date'));
+    $admin = new WP_Admin_UI(array('item'=>'XML Sitemap','items'=>'XML Sitemaps','table'=>SEARCH_ENGINE_TBL.'sites','columns'=>$columns,'icon'=>SEARCH_ENGINE_URL.'/assets/icons/search_32.png','readonly'=>true,'custom'=>array('download_xml'=>array('label'=>'Download XML','link'=>SEARCH_ENGINE_URL.'/xml-sitemap.php?site_id={@id}&token='.get_option('search_engine_token')))));
+    $admin->go();
+}
 function search_engine_groups ()
 {
     require_once SEARCH_ENGINE_DIR.'/wp-admin-ui/Admin.class.php';
     $columns = array('name','created'=>array('label'=>'Date Created','type'=>'date'),'updated'=>array('label'=>'Last Modified','type'=>'date'));
     $form_columns = $columns;
-    $form_columns['created']['update'] = false;
+    $form_columns['created']['date_touch_on_create'] = true;
     $form_columns['created']['display'] = false;
-    $form_columns['updated']['update'] = true;
+    $form_columns['updated']['date_touch'] = true;
     $form_columns['updated']['display'] = false;
     $admin = new WP_Admin_UI(array('item'=>'Group','items'=>'Groups','table'=>SEARCH_ENGINE_TBL.'groups','columns'=>$columns,'form_columns'=>$form_columns,'icon'=>SEARCH_ENGINE_URL.'/assets/icons/search_32.png'));
     $admin->go();
@@ -614,7 +759,7 @@ function search_engine_view_index ()
     $form_columns = $columns;
     unset($form_columns['indexed']);
     $form_columns[] = 'scheme';
-    $form_columns['updated']['update'] = true;
+    $form_columns['updated']['date_touch'] = true;
     $form_columns['updated']['display'] = false;
     $admin = new WP_Admin_UI(array('item'=>'Index','items'=>'Index','table'=>SEARCH_ENGINE_TBL.'sites','columns'=>$columns,'form_columns'=>$form_columns,'icon'=>SEARCH_ENGINE_URL.'/assets/icons/search_32.png','custom'=>array('action_end_view'=>'search_engine_view_index_run','view'=>'search_engine_view_index_details'),'edit'=>false,'add'=>false,'view'=>true));
     $admin->go();
@@ -636,7 +781,7 @@ function search_engine_view_index_run ($obj,$row)
 function search_engine_logs ()
 {
     require_once SEARCH_ENGINE_DIR.'/wp-admin-ui/Admin.class.php';
-    $admin = new WP_Admin_UI(array('export'=>true,'item'=>'Search Log','items'=>'Search Logs','table'=>SEARCH_ENGINE_TBL.'log','columns'=>array('query','time'=>array('type'=>'date','label'=>'Date of Search','filter'=>true),'elapsed'=>array('label'=>'Processing Time'),'results'=>array('label'=>'Total Results Found')),'add'=>false,'edit'=>false,'delete'=>false,'icon'=>SEARCH_ENGINE_URL.'/assets/icons/search_32.png'));
+    $admin = new WP_Admin_UI(array('export'=>true,'item'=>'Search Log','items'=>'Search Logs','table'=>SEARCH_ENGINE_TBL.'log','columns'=>array('query','time'=>array('type'=>'date','label'=>'Date of Search','filter'=>true),'elapsed'=>array('label'=>'Processing Time (seconds)'),'results'=>array('label'=>'Total Results Found')),'add'=>false,'edit'=>false,'delete'=>false,'icon'=>SEARCH_ENGINE_URL.'/assets/icons/search_32.png'));
     $admin->go();
 }
 function search_engine_settings ()
@@ -653,7 +798,7 @@ function search_engine_settings ()
                 <td>
                     <input name="cronjob_token" type="text" id="cronjob_token" size="50" value="<?php echo get_option('search_engine_token'); ?>" /><br />
                     <span class="description">By default, this is generated based on your secure keys from wp-config.php - but you can change it here. Make sure it's secure and that no one else gets this -- this key allows you to Index your site from a Cronjob on your server or by accessing the URL.<br />
-                        <label for="cronjob_url" style="font-style:normal;"><strong>URL to Cronjob:</strong></label><br /><input type="text" id="cronjob_url" size="120" value="<?php echo SEARCH_ENGINE_URL; ?>/cronjob.php?template_id=YOUR_TEMPLATE_ID&token=<?php echo get_option('search_engine_token'); ?>" /></span>
+                        <label for="cronjob_url" style="font-style:normal;"><strong>URL to Cronjob:</strong></label><br /><input type="text" id="cronjob_url" style="width:100%;" value="<?php echo SEARCH_ENGINE_URL; ?>/cronjob.php?template_id=YOUR_TEMPLATE_ID&token=<?php echo get_option('search_engine_token'); ?>" /></span>
                 </td>
             </tr>
         </table>
@@ -674,7 +819,7 @@ function search_engine_search_settings ()
     $form_columns['sites'] = array('type'=>'desc');
     $form_columns['query_filters'] = array('type'=>'desc');
     $form_columns['uri_filters'] = array('type'=>'desc');
-    $form_columns['updated']['update'] = true;
+    $form_columns['updated']['date_touch'] = true;
     $form_columns['updated']['display'] = false;
     $wpdb->query('SELECT SQL_CALC_FOUND_ROWS id FROM '.SEARCH_ENGINE_TBL.'search LIMIT 1');
     $count = @current($wpdb->get_results("SELECT FOUND_ROWS()"));
@@ -682,9 +827,7 @@ function search_engine_search_settings ()
     $count = $count->$found;
     $delete = true;
     if($count<2||(isset($_GET['action'])&&$_GET['delete']&&$count<3))
-    {
         $delete = false;
-    }
     $admin = new WP_Admin_UI(array('item'=>'Search Setting','items'=>'Search Settings','table'=>SEARCH_ENGINE_TBL.'search','columns'=>$columns,'form_columns'=>$form_columns,'delete'=>$delete,'icon'=>SEARCH_ENGINE_URL.'/assets/icons/search_32.png'));
     $admin->go();
 }
@@ -738,6 +881,7 @@ function search_engine_about ()
                             <li>Easy Indexing Wizard - Create Templates and Index Existing / New Sites</li>
                             <li>Index Templates - Reindex Sites via the Wizard or via cronjob.php</li>
                             <li>View Search Logs - View queries recently typed, how long it took them to process, and how many results were returned</li>
+                            <li>XML Sitemaps - Download an XML Sitemap based on your site's full index</li>
                             <li>Admin.Class.php - A class for plugins to manage data using the WordPress UI appearance</li>
                         </ul>
                     </li>
@@ -777,7 +921,7 @@ function search_engine_about ()
             <th scope="row">Upcoming Features - Roadmap</th>
             <td>
                 <dl>
-                    <dt>0.5.1</dt>
+                    <dt>0.6.0</dt>
                     <dd>
                         <ul>
                             <li>Search Settings - Setup / control multiple searches on your site</li>
@@ -883,7 +1027,7 @@ function search_engine_form ()
         $query = stripslashes($_GET['s']);
 ?>
 <form action="<?php bloginfo('wpurl'); ?>" method="get">
-    <input name="s" type="text" size="16" value="<?php echo htmlentities($query,ENT_COMPAT,'UTF-8'); ?>" />
+    <input name="s" type="text" size="16" value="<?php echo htmlentities($query,ENT_COMPAT,get_bloginfo('charset')); ?>" />
     <input type="submit" value="Search" />
 </form>
 <?php
@@ -891,21 +1035,23 @@ function search_engine_form ()
 function search_engine_content ($atts=false)
 {
     $time = date('Y-m-d H:i:s');
+    $css = 1;
+    $site_id = $site_ids = $template_ids = false;
     global $search_engine;
     include_once SEARCH_ENGINE_DIR.'/classes/API.class.php';
     $api = new Search_Engine_API();
     $site = parse_url(get_bloginfo('wpurl'));
-    $site = $api->get_site(array('host'=>$site['host'],'scheme'=>$site['scheme']));
-    if($site===false)
-        return;
-    $site_id = $site['id'];
-    $site_ids = array($site_id);
-    $css = 1;
+    $site = $api->get_site(array('host'=>$site['host'],'scheme'=>'http'));
+    if($site!==false)
+    {
+        $site_id = $site['id'];
+        $site_ids = array($site_id);
+    }
     if($atts!==false)
     {
-        $atts = shortcode_atts(array('sites'=>$site_id,'templates'=>false,'css'=>1),$atts);
-        $site_ids = explode(',',$atts['sites']);
-        $template_ids = explode(',',$atts['templates']);
+        $atts = array_merge(array('sites'=>$site_id,'templates'=>false,'css'=>1),$atts);
+        $site_ids = array_filter(explode(',',$atts['sites']));
+        $template_ids = array_filter(explode(',',$atts['templates']));
         if(!empty($template_ids))
             $site_ids = false;
         else
@@ -916,6 +1062,8 @@ function search_engine_content ($atts=false)
         if($css!=1)
             $css = 0;
     }
+    if(empty($site_ids)&&empty($template_ids))
+        return;
     include_once SEARCH_ENGINE_DIR.'/classes/Search.class.php';
     $query = '';
     if(!wp_style_is('search-engine')&&isset($_GET['q']))
@@ -928,10 +1076,13 @@ function search_engine_content ($atts=false)
         $search->page = $_GET['pg'];
     $search->results_per_page = 10;
     $results = $search->search_build_query($query);
-    $elapsed = timer_stop(0,0);
-    $api = new Search_Engine_API();
-    $params = array('query'=>$query,'time'=>$time,'elapsed'=>$elapsed,'results'=>count($search->total_results));
-    $api->log_query($params);
+    if($search->page==1)
+    {
+        $elapsed = timer_stop(0,0);
+        $api = new Search_Engine_API();
+        $params = array('query'=>$query,'time'=>$time,'elapsed'=>$elapsed,'results'=>$search->total_results);
+        $api->log_query($params);
+    }
     if(!wp_style_is('search-engine')&&!isset($search_engine['css_output'])&&$css==1&&!defined('SEARCH_ENGINE_CUSTOM_CSS'))
     {
         $search_engine['css_output'] =1;
@@ -942,8 +1093,8 @@ function search_engine_content ($atts=false)
 ?>
 <div id="search_engine_Area">
 <form action="<?php echo $_SERVER['REQUEST_URI']; ?>" method="get">
-    <input name="<?php echo (!wp_style_is('search-engine')?'q':'s'); ?>" type="text" size="41" class="search_engine_Box" value="<?php echo htmlentities($query,ENT_COMPAT,'UTF-8'); ?>" />
-    <input name="submit" type="submit" value="Search" class="search_engine_Button" /><?php if(defined('SEARCH_ENGINE_ADVANCED_URL')){ ?><br />
+    <input name="<?php echo (!wp_style_is('search-engine')?'q':'s'); ?>" type="text" size="41" class="search_engine_Box" value="<?php echo htmlentities($query,ENT_COMPAT,get_bloginfo('charset')); ?>" />
+    <input type="submit" value="Search" class="search_engine_Button" /><?php if(defined('SEARCH_ENGINE_ADVANCED_URL')){ ?><br />
     <a href="<?php echo SEARCH_ENGINE_ADVANCED_URL; ?>" class="search_engine_Advanced">Go to Advanced Search</a><?php } ?>
 </form>
 <?php
@@ -968,7 +1119,7 @@ function search_engine_content ($atts=false)
         $replace = http_build_query($replace);
         $request_uri = str_replace($explode,$replace,$request_uri).'&';
 ?>
-	<p>Result<?php echo ($search->total_results==1&&!empty($results))?'':'s'; ?> <strong><?php if($search->total_results<1||empty($results)){ echo 0; } else { echo $begin; ?> - <?php echo $end; } ?></strong> of <strong><?php if($search->total_results<1||empty($results)){ echo 0; } else { echo $search->total_results; } ?></strong> for <strong><?php echo htmlentities($query,ENT_COMPAT,'UTF-8'); ?></strong></p>
+	<p>Result<?php echo ($search->total_results==1&&!empty($results))?'':'s'; ?> <strong><?php if($search->total_results<1||empty($results)){ echo 0; } else { echo $begin; ?> - <?php echo $end; } ?></strong> of <strong><?php if($search->total_results<1||empty($results)){ echo 0; } else { echo $search->total_results; } ?></strong> for <strong><?php echo htmlentities($query,ENT_COMPAT,get_bloginfo('charset')); ?></strong></p>
 </div>
 <?php
         if(!empty($results))
@@ -982,9 +1133,9 @@ function search_engine_content ($atts=false)
                     $result->description = $result->fulltxt;
 ?>
     <li>
-        <h3 class="search_engine_Title"><a href="<?php echo $result->url; ?>"><?php echo $search->search_do_excerpt($result->title,68); ?></a></h3>
+        <h3 class="search_engine_Title"><a href="<?php echo $result->url; ?>"><?php echo $search->search_do_excerpt($result->title,68,false); ?></a></h3>
         <div class="search_engine_Description"><?php echo $search->search_do_excerpt($result->description); ?></div>
-        <cite class="search_engine_URL"><?php echo $search->search_do_excerpt($result->url); ?></cite>
+        <cite class="search_engine_URL"><a href="<?php echo $result->url; ?>"><?php echo $search->search_do_excerpt($result->url); ?></a></cite>
     </li>
 <?php
         }

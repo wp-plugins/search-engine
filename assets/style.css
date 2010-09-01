@@ -89,11 +89,15 @@ div#search_engine_Area div.search_engine_Description {
 	padding: 0!important;
     color:#000!important;
 }
-div#search_engine_Area cite.search_engine_URL {
+div#search_engine_Area cite.search_engine_URL a {
 	color: green!important;
 	font-size: 13px!important;
 	margin: 0!important;
 	padding: 0!important;
+	text-decoration: none!important;
+}
+div#search_engine_Area cite.search_engine_URL a:hover {
+text-decoration: underline!important;
 }
 div#search_engine_Area div.search_engine_Pagination {
 	margin: 0!important;

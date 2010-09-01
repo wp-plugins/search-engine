@@ -13,7 +13,7 @@ class Search_Engine_Sitemap
         $max_min = $wpdb->get_row("SELECT MAX(level) as the_max,MIN(level) as the_min FROM ".SEARCH_ENGINE_TBL."links WHERE site=$this->site",ARRAY_A);
         $min = $max_min['the_min'];
         $max = $max_min['the_max'];
-        $results = $wpdb->get_results("SELECT * FROM ".SEARCH_ENGINE_TBL."links WHERE site=1 ORDER BY level,url",ARRAY_A);
+        $results = $wpdb->get_results("SELECT * FROM ".SEARCH_ENGINE_TBL."links WHERE site=$this->site ORDER BY level,url",ARRAY_A);
         $minimum = ($max<10)?'0.1':'0.0';
         foreach($results as $result)
         {
@@ -32,14 +32,17 @@ class Search_Engine_Sitemap
             $this->links[] = array('url'=>$result['url'],'lastmod'=>strtotime($result['lastmod']),'changefreq'=>($result['level']==0?$this->changefreq:$this->changefreq_sub),'priority'=>$priority);
         }
     }
-    function build_xml_sitemap ($site=0)
+    function build_xml_sitemap ($site=0,$output=false)
     {
         if($site<1)
             return false;
         $this->site = $site;
         $this->get_links();
-        header('Content-Type: text/xml');
-        echo '<'.'?xml version="1.0" encoding="UTF-8"?'.'>'."\n";
+        if($output===false)
+            header('Content-Type: text/xml');
+        else
+            ob_start();
+        echo '<'.'?xml version="1.0" encoding="'.get_bloginfo('charset').'"?'.'>'."\n";
 ?>
     <urlset xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
              xsi:schemaLocation="http://www.sitemaps.org/schemas/sitemap/0.9 http://www.sitemaps.org/schemas/sitemap/0.9/sitemap.xsd"
@@ -50,6 +53,8 @@ class Search_Engine_Sitemap
 ?>
     </urlset>
 <?php
+        if($output!==false)
+            return ob_get_clean();
     }
     function build_xml_sitemap_item ($link)
     {

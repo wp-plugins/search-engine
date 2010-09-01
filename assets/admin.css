@@ -1,6 +1,6 @@
 .search_engine_wizard {background: #f9f9f9;margin: 0 10px;}
 .search_engine_wizard .loader {width: 100%; text-align: center; margin: 20px 0; height:50px; padding:10px 0;}
-.search_engine_wizard .loader p {
+.search_engine_wizard .loader.success p {
     -moz-border-radius: 5px;
     -webkit-border-radius: 5px;
     border-radius: 5px;
@@ -11,6 +11,16 @@
     margin-top:8px;
     padding:5px;
     color: #36763c;
+}
+.search_engine_wizard .loader.error {
+    height:auto;
+    margin:auto;
+}
+.search_engine_wizard .loader.error p {
+    display:block;
+    font-size:16px;
+    margin-top:8px;
+    text-align:center;
 }
 .search_engine_wizard iframe {background: #FFF; border: 1px solid #ccc;-moz-border-radius: 5px;-webkit-border-radius: 5px;border-radius: 5px;}
 #search_engine_advanced,

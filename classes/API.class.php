@@ -43,15 +43,24 @@ class Search_Engine_API
     function get_page ($url,$params)
     {
         if(false===$this->validate($params,array('url','site')))
-        {
             return false;
-        }
         global $wpdb;
         $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM $this->table_links WHERE `url`=%s AND `site`=%d",array($params['url'],$params['site'])),ARRAY_A);
         if(!empty($row))
-        {
             return $row;
-        }
+        else
+            return false;
+    }
+    function md5_page ($params)
+    {
+        if(false===$this->validate($params,array('url','site','md5_checksum')))
+            return false;
+        if(empty($params['md5_checksum']))
+            return false;
+        global $wpdb;
+        $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM $this->table_links WHERE `url`!=%s AND `site`=%d AND `md5_checksum`=%s",array($params['url'],$params['site'],$params['md5_checksum'])),ARRAY_A);
+        if(!empty($row))
+            return $row;
         else
             return false;
     }
@@ -62,7 +71,7 @@ class Search_Engine_API
             return false;
         }
         global $wpdb;
-        $link_id = @current($wpdb->get_col($wpdb->prepare("SELECT id FROM $this->table_links WHERE `url`=%s AND `site`=%d",array($params['url'], $params['site']))));
+        $link_id = @current($wpdb->get_col($wpdb->prepare("SELECT `id` FROM $this->table_links WHERE `url`=%s AND `site`=%d",array($params['url'], $params['site']))));
         if(is_numeric($link_id))
         {
             $wpdb->query($wpdb->prepare("UPDATE $this->table_links SET `title`=%s,`description`=%s,`fulltxt`=%s,`lastmod`=%s,`updated`=FROM_UNIXTIME(UNIX_TIMESTAMP()),`size`=%d,`md5_checksum`=%s,`level`=%d WHERE id=$link_id",
@@ -81,7 +90,7 @@ class Search_Engine_API
             $link_id = $wpdb->insert_id;
             foreach($params['keywords'] as $keyword_id=>$weight)
             {
-                $index_id = @current($wpdb->get_col($wpdb->prepare("SELECT id FROM $this->table_index WHERE `link`=%d AND `keyword`=%d AND `site`=%d",array($link_id, $keyword_id, $params['site']))));
+                $index_id = @current($wpdb->get_col($wpdb->prepare("SELECT `id` FROM $this->table_index WHERE `link`=%d AND `keyword`=%d AND `site`=%d",array($link_id, $keyword_id, $params['site']))));
                 if(is_numeric($index_id))
                 {
                     $wpdb->query($wpdb->prepare("UPDATE $this->table_index SET `weight`=%d WHERE id=$index_id",
@@ -103,7 +112,7 @@ class Search_Engine_API
             return false;
         }
         global $wpdb;
-        $link_id = @current($wpdb->get_col($wpdb->prepare("SELECT id FROM $this->table_links WHERE `url`=%s AND `site`=%d",array($params['url'], $params['site']))));
+        $link_id = @current($wpdb->get_col($wpdb->prepare("SELECT `id` FROM $this->table_links WHERE `url`=%s AND `site`=%d",array($params['url'], $params['site']))));
         if(is_numeric($link_id))
         {
             $wpdb->query("DELETE FROM $this->table_links WHERE id=$link_id");
@@ -119,7 +128,7 @@ class Search_Engine_API
             return false;
         }
         global $wpdb;
-        $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM $this->table_queue WHERE `site`=%d AND `template`=%d",array($params['site'],$params['template'])),ARRAY_A);
+        $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM $this->table_queue WHERE `site`=%d AND `template`=%d ORDER BY id DESC",array($params['site'],$params['template'])),ARRAY_A);
         if(!empty($row))
         {
             return $row;
@@ -134,10 +143,12 @@ class Search_Engine_API
             return false;
         }
         global $wpdb;
-        $queue_id = @current($wpdb->get_col($wpdb->prepare("SELECT id FROM $this->table_queue WHERE `site`=%d AND `template`=%d",array($params['site'], $params['template']))));
-        if(is_numeric($queue_id))
+        $queue = @current($wpdb->get_results($wpdb->prepare("SELECT `id`,`shutdown` FROM $this->table_queue WHERE `site`=%d AND `template`=%d ORDER BY id DESC",array($params['site'], $params['template']))));
+        if(false!==$queue)
         {
-            $wpdb->query($wpdb->prepare("UPDATE $this->table_queue SET `queue`=%s,`updated`=FROM_UNIXTIME(UNIX_TIMESTAMP()) WHERE id=$queue_id",array($params['queue'])));
+            if($queue->shutdown==1)
+                die("<br />\n<br />\n".date('m/d/Y h:i:sa').' - <strong>Shutdown initiated.</strong>');
+            $wpdb->query($wpdb->prepare("UPDATE $this->table_queue SET `queue`=%s,`updated`=FROM_UNIXTIME(UNIX_TIMESTAMP()) WHERE `id`={$queue->id}",array($params['queue'])));
             return true;
         }
         else
@@ -155,13 +166,8 @@ class Search_Engine_API
             return false;
         }
         global $wpdb;
-        $queue_id = @current($wpdb->get_col($wpdb->prepare("SELECT id FROM $this->table_queue WHERE `site`=%d AND `template`=%d",array($params['site'], $params['template']))));
-        if(is_numeric($queue_id))
-        {
-            $wpdb->query("DELETE FROM $this->table_queue WHERE id=$queue_id");
-            return true;
-        }
-        return false;
+        $wpdb->query($wpdb->prepare("DELETE FROM $this->table_queue WHERE `site`=%d AND `template`=%d",array($params['site'], $params['template'])));
+        return true;
     }
     function get_template ($params)
     {
@@ -178,14 +184,13 @@ class Search_Engine_API
     }
     function save_template ($params)
     {
-        // NEEDS WORK
+        // NOT FUNCTIONAL
         if(false===$this->validate($params,array('host','scheme')))
         {
             return false;
         }
         global $wpdb;
-        $site_id = @current($wpdb->get_col($wpdb->prepare("SELECT id FROM $this->table_templates WHERE `host`=%s AND ",array($params['host'],$params['scheme']))));
-        if(is_numeric($site_id))
+        if(is_numeric($params['id']))
         {
             $wpdb->query($wpdb->prepare("UPDATE $this->table_templates SET `group`=%d,`protocol`=%s,`updated`=FROM_UNIXTIME(UNIX_TIMESTAMP()) WHERE id=$site_id",
                     array($params['group'], $params['protocol'])));
@@ -193,8 +198,8 @@ class Search_Engine_API
         }
         else
         {
-            $wpdb->query($wpdb->prepare("INSERT INTO $this->table_templates (`group`,`host`,`scheme`,`updated`) VALUES ( %d, %s, %s, FROM_UNIXTIME(UNIX_TIMESTAMP()) )",
-                    array($params['group'], $params['host'], $params['scheme'])));
+            $wpdb->query($wpdb->prepare("INSERT INTO $this->table_templates (`group`,`site`,`scheme`,`directory`,`indexed`,`updated`) VALUES ( %d, %s, %s, %s, FROM_UNIXTIME(UNIX_TIMESTAMP()), FROM_UNIXTIME(UNIX_TIMESTAMP()) )",
+                    array($params['group'], $params['host'], $params['scheme'], $params['directory'])));
             return $wpdb->insert_id;
         }
     }
@@ -255,7 +260,7 @@ class Search_Engine_API
             return false;
         }
         global $wpdb;
-        $site_id = @current($wpdb->get_col($wpdb->prepare("SELECT id FROM $this->table_sites WHERE `host`=%s AND ",array($params['host'],$params['scheme']))));
+        $site_id = @current($wpdb->get_col($wpdb->prepare("SELECT `id` FROM $this->table_sites WHERE `host`=%s AND ",array($params['host'],$params['scheme']))));
         if(is_numeric($site_id))
         {
             $wpdb->query($wpdb->prepare("UPDATE $this->table_sites SET `group`=%d,`protocol`=%s,`updated`=FROM_UNIXTIME(UNIX_TIMESTAMP()) WHERE id=$site_id",
@@ -286,7 +291,7 @@ class Search_Engine_API
             return false;
         }
         global $wpdb;
-        $site_id = @current($wpdb->get_col($wpdb->prepare("SELECT id FROM $this->table_sites WHERE `host`=%s",array($params['host']))));
+        $site_id = @current($wpdb->get_col($wpdb->prepare("SELECT `id` FROM $this->table_sites WHERE `host`=%s",array($params['host']))));
         if(is_numeric($site_id))
         {
             $wpdb->query("DELETE FROM $this->table_sites WHERE id=$site_id");
@@ -316,7 +321,7 @@ class Search_Engine_API
         global $wpdb;
         if(isset($params['id']))
         {
-            $group_id = @current($wpdb->get_col($wpdb->prepare("SELECT id FROM $this->table_groups WHERE `id`=%d",array($params['id']))));
+            $group_id = @current($wpdb->get_col($wpdb->prepare("SELECT `id` FROM $this->table_groups WHERE `id`=%d",array($params['id']))));
             if(is_numeric($group_id))
             {
                 $wpdb->query($wpdb->prepare("UPDATE $this->table_groups SET `name`=%s WHERE id=$group_id",
@@ -340,7 +345,7 @@ class Search_Engine_API
             return false;
         }
         global $wpdb;
-        $site_id = @current($wpdb->get_col($wpdb->prepare("SELECT id FROM $this->table_sites WHERE `host`=%s",array($params['host']))));
+        $site_id = @current($wpdb->get_col($wpdb->prepare("SELECT `id` FROM $this->table_sites WHERE `host`=%s",array($params['host']))));
         if(is_numeric($site_id))
         {
             $wpdb->query("DELETE FROM $this->table_sites WHERE id=$site_id");
@@ -356,7 +361,7 @@ class Search_Engine_API
         }
         $params['name'] = strtolower($params['name']);
         global $wpdb;
-        $keyword_id = @current($wpdb->get_col($wpdb->prepare("SELECT id FROM $this->table_keywords WHERE `name`=%s",array($params['name']))));
+        $keyword_id = @current($wpdb->get_col($wpdb->prepare("SELECT `id` FROM $this->table_keywords WHERE `name`=%s",array($params['name']))));
         if(is_numeric($keyword_id))
             return $keyword_id;
         else
@@ -371,7 +376,7 @@ class Search_Engine_API
         global $wpdb;
         if(isset($params['id']))
         {
-            $group_id = @current($wpdb->get_col($wpdb->prepare("SELECT id FROM $this->table_keywords WHERE `id`=%d",array($params['id']))));
+            $group_id = @current($wpdb->get_col($wpdb->prepare("SELECT `id` FROM $this->table_keywords WHERE `id`=%d",array($params['id']))));
             if(is_numeric($group_id))
             {
                 $wpdb->query($wpdb->prepare("UPDATE $this->table_keywords SET `name`=%s WHERE id=$group_id",
@@ -395,7 +400,7 @@ class Search_Engine_API
             return false;
         }
         global $wpdb;
-        $keyword_id = @current($wpdb->get_col($wpdb->prepare("SELECT id FROM $this->table_keywords WHERE `name`=%s",array($params['name']))));
+        $keyword_id = @current($wpdb->get_col($wpdb->prepare("SELECT `id` FROM $this->table_keywords WHERE `name`=%s",array($params['name']))));
         if(is_numeric($keyword_id))
         {
             $wpdb->query("DELETE FROM $this->table_keywords WHERE id=$keyword_id");

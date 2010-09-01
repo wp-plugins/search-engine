@@ -37,7 +37,7 @@ if($spider->site_id!==false)
             {
                 $spider->$var_name = $var_value;
             }
-            $spider->munch($spider->links_current,($spider->current_depth-1));
+            $spider->munch($spider->links_current,$spider->current_depth);
         }
         else
         {
@@ -51,5 +51,5 @@ if($spider->site_id!==false)
 }
 else
 {
-    die('Error, please contact plugin developer');
+    die('Error, please contact plugin developer at http://scottkclark.com/');
 }

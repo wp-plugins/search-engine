@@ -1,4 +1,170 @@
 <?php
+function get_indexable_html ($data)
+{
+    $data = preg_replace(
+                array('@<!--.*?-->@siu',
+                    '@<pre[^>]*?>.*?</pre>@siu',
+                    '@<code[^>]*?.*?</code>@siu',
+                    '@<style[^>]*?>.*?</style>@siu',
+                    '@<script[^>]*?.*?</script>@siu',
+                    '@<audio[^>]*?>.*?</audio>@siu',
+                    '@<video[^>]*?.*?</video>@siu',
+                    '@<object[^>]*?.*?</object>@siu',
+                    '@<embed[^>]*?.*?</embed>@siu',
+                    '@<applet[^>]*?.*?</applet>@siu',
+                    '@<noscript[^>]*?.*?</noscript>@siu',
+                    '@<noembed[^>]*?.*?</noembed>@siu'),
+                array(' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' '),
+                $data);
+    if (is_file($data)||preg_match('{^(?:http|ftp)://}',$data))
+        $html = file_get_html($data);
+    else
+        $html = str_get_html($data);
+    $real_html = $data;
+    $find = $html->find('.onlyindex');
+    if(!empty($find))
+    {
+        $real_html = '';
+        foreach($find as $f)
+            $real_html .= ' '.$f->outertext;
+    }
+    $find = $html->find('.noindex');
+    if(!empty($find))
+    {
+        foreach($find as $f)
+            $real_html = str_replace($f->outertext,' ',$real_html);
+    }
+    $html->clear();
+    unset($html);
+    return $real_html;
+}
+function get_tag_data ($data,$tags=array(),$meta=false,$filters=false)
+{
+    $data = preg_replace(
+                array('@<!--.*?-->@siu',
+                    '@<pre[^>]*?>.*?</pre>@siu',
+                    '@<code[^>]*?.*?</code>@siu',
+                    '@<style[^>]*?>.*?</style>@siu',
+                    '@<script[^>]*?.*?</script>@siu',
+                    '@<audio[^>]*?>.*?</audio>@siu',
+                    '@<video[^>]*?.*?</video>@siu',
+                    '@<object[^>]*?.*?</object>@siu',
+                    '@<embed[^>]*?.*?</embed>@siu',
+                    '@<applet[^>]*?.*?</applet>@siu',
+                    '@<noscript[^>]*?.*?</noscript>@siu',
+                    '@<noembed[^>]*?.*?</noembed>@siu'),
+                array(' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' ',' '),
+                $data);
+    if (is_file($data)||preg_match('{^(?:http|ftp)://}',$data))
+        $html = file_get_html($data);
+    else
+        $html = str_get_html($data);
+    $html = get_filtered_tags($html,$tags,$meta,$filters);
+    return $html;
+}
+function get_filtered_tags ($html,$tags,$meta=false,$filters=false)
+{
+    $default_filters = array('a'=>array('rel'=>array('nofollow','noindex','searchengine_nofollow','searchengine_noindex')));
+    if(false===$filters)
+        $filters = $default_filters;
+    $results = array();
+    $links = false;
+    if(false===$meta)
+    {
+        $find = $html->find('.onlyindex');
+        if(!empty($find))
+        {
+            $real_html = '';
+            foreach($find as $f)
+            {
+                $real_html .= ' '.$f->outertext;
+            }
+            $html->clear();
+            $html->load($real_html);
+        }
+        $find = $html->find('.noindex');
+        if(!empty($find))
+        {
+            $real_html = $html->save();
+            foreach($find as $f)
+            {
+                $real_html = str_replace($f->outertext,' ',$real_html);
+            }
+            $html->clear();
+            $html->load($real_html);
+        }
+        if($tags==array('a','area','link','iframe','frame'))
+        {
+            $find = $html->find('.nofollow');
+            if(!empty($find))
+            {
+                $real_html = $html->save();
+                foreach($find as $f)
+                {
+                    $real_html = str_replace($f->outertext,' ',$real_html);
+                }
+                $html->clear();
+                $html->load($real_html);
+            }
+            $links = true;
+        }
+    }
+    foreach($tags as $tag)
+    {
+        $result = $html->find($tag);
+        foreach($filters as $filter=>$attributes)
+        {
+            if($filter==$tag||$filter=='any')
+            {
+                foreach((array)$result as $index=>$r)
+                {
+                    foreach((array)$attributes as $attribute=>$value)
+                    {
+                        if(!isset($result->$attribute))
+                            continue;
+                        $values = implode(' ',$r->$attribute);
+                        if(true===$value)
+                            unset($result[$index]);
+                        elseif($value===$r->$attribute||in_array($value,$values))
+                            unset($result[$index]);
+                    }
+                    /*if((false===$links&&empty($r->innertext)&&$tag!='meta')||(false!==$links&&empty($r->href)))
+                        unset($result[$index]);
+                    elseif(false!==$links&&($tag=='iframe'||$tag=='frame')&&empty($r->src))
+                        unset($result[$index]);
+                    elseif(false!==$links&&empty($r->href))
+                        unset($result[$index]);*/
+                }
+            }
+        }
+        if(!isset($results[$tag]))
+            $results[$tag] = array();
+        foreach($result as $r)
+        {
+            if(false!==$links)
+            {
+                if(($tag=='iframe'||$tag=='frame')&&!empty($r->src))
+                    $results[$tag][] = $r->src;
+                elseif(!empty($r->href))
+                    $results[$tag][] = $r->href;
+            }
+            else
+            {
+                $available_attr = array('name','http-equiv','content','href','src','class','id','title','alt','rel');
+                $real = array('content'=>$r->plaintext,'html'=>$r->innertext);
+                foreach($available_attr as $attr)
+                {
+                    $real[$attr] = (isset($r->$attr)?$r->$attr:'');
+                }
+                $results[$tag][] = $real;
+            }
+        }
+        $results[$tag] = array_filter($results[$tag]);
+    }
+    $html->clear();
+    unset($html);
+    return $results;
+}
 /*******************************************************************************
 Version: 1.11 ($Rev: 175 $)
 Website: http://sourceforge.net/projects/simplehtmldom/
@@ -259,6 +425,7 @@ class simple_html_dom_node {
 
     // find elements by css selector
     function find($selector, $idx=null) {
+
         $selectors = $this->parse_selector($selector);
         if (($count=count($selectors))===0) return array();
         $found_keys = array();
@@ -295,7 +462,7 @@ class simple_html_dom_node {
 
         // return nth-element or array
         if (is_null($idx)) return $found;
-		else if ($idx<0) $idx = count($found) + $idx;
+        else if ($idx<0) $idx = count($found) + $idx;
         return (isset($found[$idx])) ? $found[$idx] : null;
     }
 

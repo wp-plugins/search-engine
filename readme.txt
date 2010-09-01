@@ -4,7 +4,7 @@ Donate link: http://www.scottkclark.com/
 Tags: search engine, spider, index, search, google, buddypress, full search, wordpress search
 Requires at least: 2.9
 Tested up to: 3.0
-Stable tag: 0.4.7
+Stable tag: 0.5.1
 
 THIS IS A BETA VERSION - Currently in development - A search engine for WordPress that indexes ALL of your site and provides comprehensive search.
 
@@ -22,13 +22,34 @@ So... that means Sidebars, Widgets, Pages, Posts, Custom Post Types, Pod Pages, 
 
 == Frequently Asked Questions ==
 
-What if my site or parts of my site is password protected? Currently, only htaccess password protected pages are supported, I'm currently working towards supporting WordPress User Authenticated indexing (depending what user group it's set to index as).
+= What if my site or parts of my site are password protected or are only available to logged in users? =
+Currently, only .htaccess password protected pages are supported, I'm currently working towards supporting WordPress User Authenticated indexing (depending what user group it's set to index as).
+
+= How can I include or exclude content on my page from being indexed? =
+* Exclude content within section(s) of your site by adding the class noindex to the element tag(s)
+* Explicitly ONLY include content within section(s) of your site by adding the class onlyindex to the element tag(s)
+
+= How can I allow / disallow URLs from being indexed? =
+* Disallow the URI(s) in your robots.txt file
+* Disallow the URI(s) with a meta robots tag w/ nofollow
+* Disallow the link(s) with a rel attribute of nofollow
+* Disallow many links within section(s) of your site by adding the class nofollow to the element tag(s)
 
 == Changelog ==
 
-= 0.5.0 =
+= 0.5.1 =
+* You can now index based off of a directory, when indexing a new site simply type in the path like a normal url at the end of a domain name and you'll start indexing from that page on (previously restricted to the root only)
+* You can now use 'nofollow' as a class to exclude a set of URLs within an HTML tag, or 'noindex' in a class to exclude content on a page from indexing, or use 'onlyindex' in a class to ONLY include that content on the page for indexing (excludes all other data automatically): In all indexing cases, links will be pulled from the entire page even outside designated onlyindex/noindex sections -- The class check can be partial, so you can set your class to be noindexing and 'noindex' being a part of it will trigger that functionality during indexing
+* XML Sitemaps - Download sitemaps containing links to every page of your site
+* You can now continue an index if it did not complete, either via Reindexing based on the same template or from within Wizard (you will get a visual notice alerting you to any failed indexing)
+* Added cross_scheme option, to allow switching between http and https during indexing (default restricts to the originating scheme)
 * Bug fixes + features in Admin.class.php
-* AND / OR / "Exact Phrase" multi-combination Support
+* Bug fixes in indexing
+* Bug fixes in search (encoding issues)
+
+= 0.5.0 =
+* View Search Logs - View queries recently typed, how long it took them to process, and how many results were returned
+* Bug fixes + features in Admin.class.php
 * Bug fixes in indexing
 * Bug fixes in search
 
@@ -68,8 +89,19 @@ What if my site or parts of my site is password protected? Currently, only htacc
 
 == Upgrade Notice ==
 
+= 0.5.1 =
+* You can now index based off of a directory, when indexing a new site simply type in the path like a normal url at the end of a domain name and you'll start indexing from that page on (previously restricted to the root only)
+* You can now use 'nofollow' as a class to exclude a set of URLs within an HTML tag, or 'noindex' in a class to exclude content on a page from indexing, or use 'onlyindex' in a class to ONLY include that content on the page for indexing (excludes all other data automatically): In all indexing cases, links will be pulled from the entire page even outside designated onlyindex/noindex sections -- The class check can be partial, so you can set your class to be noindexing and 'noindex' being a part of it will trigger that functionality during indexing
+* XML Sitemaps - Download sitemaps containing links to every page of your site
+* You can now continue an index if it did not complete, either via Reindexing based on the same template or from within Wizard (you will get a visual notice alerting you to any failed indexing)
+* Added cross_scheme option, to allow switching between http and https during indexing (default restricts to the originating scheme)
+* Bug fixes + features in Admin.class.php
+* Bug fixes in indexing
+* Bug fixes in search (encoding issues)
+
 = 0.5.0 =
-* AND / OR / "Exact Phrase" multi-combination Support
+* View Search Logs - View queries recently typed, how long it took them to process, and how many results were returned
+* Bug fixes + features in Admin.class.php
 * Bug fixes in indexing
 * Bug fixes in search
 
@@ -144,6 +176,8 @@ These testers are especially helping make this Beta plugin get to 1.0! If you ar
 = Administration =
 * Easy Indexing Wizard - Create Templates and Index Existing / New Sites
 * Index Templates - Reindex Sites via the Wizard or via cronjob.php
+* XML Sitemaps - Reindex Sites via the Wizard or via cronjob.php
+* View Search Logs - View queries recently typed, how long it took them to process, and how many results were returned
 * Admin.Class.php - A class for plugins to manage data using the WordPress UI appearance
 
 = Spider =
@@ -151,7 +185,7 @@ These testers are especially helping make this Beta plugin get to 1.0! If you ar
 * Link Redirection - Follows all 301 / 302 Redirects
 * Link Validation - Check for Invalid URLs / Content-Types
 * robots.txt Protocol Support - Follows rules from robots.txt at root of domain
-* nofollow / noindex Support - Follows specific rules from Robots Meta and &lt;a&gt; tags
+* nofollow / noindex Support - Follows specific rules from Robots Meta, &lt;a&gt;, and other elements (class="nofollow") tags
 * Depth Restricting - Restrict how deep spidering goes
 * URL Words Whitelist / Blacklist - Include or Exclude URLs from being spidered based on words
 * .htaccess Password Protection Support - Optional Username / Password can be passed to Spider to access restricted areas
@@ -171,10 +205,10 @@ These testers are especially helping make this Beta plugin get to 1.0! If you ar
 
 == Roadmap ==
 
-= 0.5.1 =
+= 0.6.0 =
+* AND / OR / "Exact Phrase" multi-combination Support
 * Search Settings - Setup/control multiple searches on your site
 * Negative Keyword Matching using -word Format
-* View Search Logs - View queries recently typed, how long it took them to process, and how many results were returned
 * Cronjob Groups - Ability to run multiple templates at a time based on Cronjob Group in cronjob.php
 * Integration with wp_cron - Option to enable a template to rerun on it's own - like magic!
 * View Index Logs - View statistics from indexing like Links Not Found, Links Redirected, etc

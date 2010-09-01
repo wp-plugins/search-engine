@@ -1,5 +1,6 @@
 <?php
-require_once "GetTagData.class.php";
+require_once "Simple.HTML.DOM.Parser.php";
+//require_once "GetTagData.class.php";
 
 class Search_Engine_Index
 {
@@ -124,9 +125,11 @@ class Search_Engine_Index
     }
     function remove_blacklisted_words ($keywords)
     {
+        if(!is_array($keywords))
+            $keywords = explode(' ',$keywords);
         if(!empty($this->blacklist_words))
         {
-            $keywords = str_replace($this->blacklist_words,'',$keywords);
+            $keywords = str_ireplace($this->blacklist_words,'',$keywords);
         }
         return array_filter($keywords);
     }
@@ -134,6 +137,8 @@ class Search_Engine_Index
     {
         if($keywords==false)
             $keywords = $this->keywords;
+        if(!is_array($keywords))
+            $keywords = explode(' ',$keywords);
         $keywords = array_count_values($keywords);
         arsort($keywords);
         if($return)
@@ -152,6 +157,7 @@ class Search_Engine_Index
     function get_keywords ($content)
     {
         $content = preg_replace("[^A-Za-z_\'-]", " ", $content);
+        $content = preg_replace( '/&.{0,}?;/', '', $content ); // remove entities
         $content = str_replace(array('-',' _ ',' \' '),' ',' '.$content.' ');
         $content = str_ireplace($this->common_words,' ',' '.$content.' ');
         $keywords = explode(' ',$content);
@@ -169,9 +175,9 @@ class Search_Engine_Index
             {
                 foreach($items as $attributes)
                 {
-                    if(isset($attributes['title']))
+                    if(!empty($attributes['title']))
                         $additional_content[] = trim($attributes['title']);
-                    if(isset($attributes['alt']))
+                    if(!empty($attributes['alt']))
                         $additional_content[] = trim($attributes['alt']);
                 }
             }
@@ -179,23 +185,26 @@ class Search_Engine_Index
             {
                 foreach($items as $attributes)
                 {
-                    if(isset($attributes['title']))
+                    if(!empty($attributes['title']))
                         $additional_content[] = trim($attributes['title']);
                 }
             }
         }
-        $additional_content = array_merge($additional_content,explode(' ',str_replace('/',' ',$parsed['path'])));
+        //$additional_content = array_merge($additional_content,explode(' ',str_replace('/',' ',$parsed['path'])));
         $additional_content = implode(' ',$additional_content);
         $additional_content = $this->get_keywords($additional_content);
-        $replace = array('<br />','<br/>','<br>');
+        $replace = array('<br />','<br/>','<br>',"\n","\r","\t");
         $html = str_ireplace($replace,' ',$html);
-        $html = preg_replace( '/(<!--.*?-->)/ms', '', $html );
-        $html = preg_replace( '/(<script.*?<\/script>)/ms', '', $html );
-        $content = $this->get_keywords(strip_tags($html));
+        $html = preg_replace('/&.{0,}?;/','',$html); // remove entities
+        $real_content = strip_tags(get_indexable_html($html));
+        $content = $this->get_keywords($real_content);
         $content = array_merge($additional_content,$content);
         if(!empty($this->blacklist_words))
             $content = $this->remove_blacklisted_words($content);
-        $this->keywords = $content;
-        $this->content = implode(' ',$content);
+        $content = str_replace('/',' ',$parsed['path']).' '.implode(' ',$content);
+        $content = preg_replace('/\s\s+/',' ',$content);
+        $this->keywords = explode(' ',trim($content));
+        $real_html = preg_replace('/\s\s+/',' ',$real_content);
+        $this->content = trim($real_html);
     }
 }
