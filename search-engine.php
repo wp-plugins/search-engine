@@ -3,7 +3,7 @@
 Plugin Name: Search Engine
 Plugin URI: http://www.scottkclark.com/wordpress/search-engine/
 Description: THIS IS A BETA VERSION - Currently in development - A search engine for WordPress that indexes ALL of your site and provides comprehensive search.
-Version: 0.5.2
+Version: 0.5.2.1
 Author: Scott Kingsley Clark
 Author URI: http://www.scottkclark.com/
 
@@ -34,7 +34,7 @@ function search_engine_init ()
     global $current_user,$wpdb;
     $capabilities = search_engine_capabilities();
     // check version
-    $version = (int)get_option('search_engine_version');
+    $version = (int)get_option('SEARCH_ENGINE_VERSION');
     if(empty($version))
     {
         search_engine_reset();
@@ -48,8 +48,8 @@ function search_engine_init ()
             $wpdb->query("ALTER TABLE `".SEARCH_ENGINE_TBL."templates` ADD COLUMN `cross_scheme` INT unsigned AFTER `max_depth`");
             $wpdb->query("ALTER TABLE `".SEARCH_ENGINE_TBL."queue` ADD COLUMN `shutdown` INT unsigned AFTER `template`");
         }
-        delete_option('search_engine_version');
-        add_option('search_engine_version',SEARCH_ENGINE_VERSION);
+        delete_option('SEARCH_ENGINE_VERSION');
+        add_option('SEARCH_ENGINE_VERSION',SEARCH_ENGINE_VERSION);
     }
     // thx gravity forms, great way of integration with members!
     if ( function_exists( 'members_get_capabilities' ) ){
@@ -85,8 +85,8 @@ function search_engine_reset ()
     {
         $wpdb->query($sql_explode[$i]);
     }
-    delete_option('search_engine_version');
-    add_option('search_engine_version',SEARCH_ENGINE_VERSION);
+    delete_option('SEARCH_ENGINE_VERSION');
+    add_option('SEARCH_ENGINE_VERSION',SEARCH_ENGINE_VERSION);
 }
 function search_engine_get_capabilities ($caps)
 {

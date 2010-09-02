@@ -656,11 +656,32 @@ class Search_Engine_Spider
             $this->links_other[] = $url;
             return false;
         }
-        if(strpos($url,'#')!==false&&strpos($url,'#')<1)
+        if(strpos($url,'#')!==false)
         {
-            $this->message('<strong>URL starts with "#"</strong>: '.$url);
-            $this->links_other[] = $url;
-            return false;
+            if(strpos($url,'#')<1)
+            {
+                $this->message('<strong>URL starts with "#"</strong>: '.$url);
+                $this->links_other[] = $url;
+                return false;
+            }
+            else
+            {
+                $test = explode('#',$url);
+                $test = array_reverse($test);
+                unset($test[0]);
+                $test = array_reverse($test);
+                $test = implode('#',$url);
+                if(in_array($test,$this->links)||in_array($test,$this->links_queued))
+                {
+                    $key = array_search($link,$this->links_queued);
+                    if($key!==false)
+                        unset($this->links_queued[$key]);
+                    $this->links_other[] = $url;
+                    return false;
+                }
+                elseif(in_array($test,$this->links_other)||in_array($test,$this->links_processed)||in_array($test,$this->links_spidered)||in_array$test,$this->links_excluded)||in_array($test,$this->links_redirected)||in_array($test,$this->links_notfound)||in_array($test,$this->links_servererror)||in_array($test,$this->links_duplicate))
+                    return false;
+            }
         }
         if(strpos($url,':')!==false&&strpos($url,'http://')===false&&strpos($url,'https://')===false)
         {
@@ -678,16 +699,11 @@ class Search_Engine_Spider
             $k = 0;
             foreach($links as $link)
             {
-                if(in_array($link,$this->links))
+                if(in_array($link,$this->links)||in_array($link,$this->links_queued))
+                    continue;
+                if(in_array($link,$this->links_other)||in_array($link,$this->links_processed)||in_array($link,$this->links_spidered)||in_array($link,$this->links_excluded)||in_array($link,$this->links_redirected)||in_array($link,$this->links_notfound)||in_array($link,$this->links_servererror)||in_array($link,$this->links_duplicate))
                     continue;
                 $check = @parse_url($link);
-                if(in_array($link,$this->links_other)||in_array($link,$this->links_processed)||in_array($link,$this->links_spidered)||in_array($link,$this->links_excluded)||in_array($link,$this->links_redirected)||in_array($link,$this->links_notfound)||in_array($link,$this->links_servererror)||in_array($link,$this->links_duplicate))
-                {
-                    $key = array_search($link,$this->links_queued);
-                    if($key!==false)
-                        unset($this->links_queued[$key]);
-                    continue;
-                }
                 if(!$this->check_url_structure($link,$check))
                 {
                     $key = array_search($link,$this->links_queued);
@@ -726,15 +742,10 @@ class Search_Engine_Spider
                     if($this->url_exclusion($check['path'],$link)!==false||$this->url_exclusion($check['path'].'?'.$check['query'],$link)!==false)
                     {
                         if($this->current_host!==false&&$this->current_host!=$check['host'])
-                        {
                             continue;
-                        }
                         if(in_array($link,$this->links))
-                        {
                             continue;
-                        }
                         $ret[$k] = $link;
-                        $this->links[] = $link;
                     }
                     else
                         continue;
@@ -742,6 +753,7 @@ class Search_Engine_Spider
                 else
                     continue;
                 $this->message('Found URL: '.$ret[$k]);
+                $this->links[] = $link;
                 $k++;
             }
         }
