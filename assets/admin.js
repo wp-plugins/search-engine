@@ -9,11 +9,10 @@ function iframedone()
     jQuery('#scroller').stop().scrollTo('100%','0%', { axis:'y' });
     clearTimeout(t);
     jQuery('#startstop').remove();
-    if(jQuery('#scroller').html().search("Spidering Complete")>-1)
+    if(jQuery('#scroller').contents().text().search("Spidering Completed")>-1)
     {
-        jQuery('.loader').addClass('complete');
+        jQuery('.loader').addClass('success');
         jQuery('.loader').html('<p><strong>Indexing is complete!</strong> - <a href="admin.php?page=search-engine">Index another site &raquo;</a></p>');
-        return false;
     }
     else
     {
