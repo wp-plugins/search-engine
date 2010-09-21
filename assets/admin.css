@@ -14,7 +14,7 @@
 }
 .search_engine_wizard .loader.error {
     height:auto;
-    margin:auto;
+    margin: 20px 0;
 }
 .search_engine_wizard .loader.error p {
     display:block;

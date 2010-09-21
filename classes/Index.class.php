@@ -1,6 +1,5 @@
 <?php
 require_once "Simple.HTML.DOM.Parser.php";
-//require_once "GetTagData.class.php";
 
 class Search_Engine_Index
 {

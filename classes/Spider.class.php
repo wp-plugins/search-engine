@@ -1,6 +1,5 @@
 <?php
 require_once "Simple.HTML.DOM.Parser.php";
-//require_once "GetTagData.class.php";
 require_once "Index.class.php";
 require_once "API.class.php";
 
@@ -247,6 +246,7 @@ class Search_Engine_Spider
         $this->message('Crunching Next URL: '.$url);
         $this->current_url = $url;
         $parsed = @parse_url($url);
+        $parsed['path'] = '/'.ltrim($parsed['path'],'/');
         $this->current_parsed = $parsed;
         if($this->robotstxt_check===false)
             $this->get_robotstxt($url);
@@ -383,151 +383,73 @@ class Search_Engine_Spider
         $se_message_counter++;
 
     }
-    function get_url ($url,$method=1,$retry=0)
+    function get_url ($url,$retry=0)
     {
         $parsed = @parse_url($url);
         // User Agent for Firefox found at: http://whatsmyuseragent.com/, Chrome found in Chrome at about:version
         ini_set('user_agent',$this->user_agent);
-        $ret = '';
-        $headers = array();
-        $headers['http_code'] = 200;
-        $headers['errno'] = 0;
-        $headers['errmsg'] = '';
-        $headers['size'] = 0;
-        if($method==1)
+        $options = array('user-agent'=>$this->user_agent);
+        if($this->username!==false)
         {
-            $header = array();
-            $header[0] = "Accept: application/xhtml+xml,text/html;q=0.9,text/plain";
-            $header[] = "Connection: keep-alive";
-            $header[] = "Keep-Alive: 300";
-            $curl = curl_init($url);
-            $options = array(
-                CURLOPT_RETURNTRANSFER => 1,
-                CURLOPT_HEADER => 1,
-                CURLOPT_HTTPHEADER => $header,
-                CURLOPT_FOLLOWLOCATION => 0,
-                CURLOPT_AUTOREFERER => 1,
-                CURLOPT_MAXREDIRS => 3,
-                CURLOPT_USERAGENT => $this->user_agent,
-                CURLOPT_CONNECTTIMEOUT => 30,
-                CURLOPT_TIMEOUT => 60,
-                CURLOPT_FAILONERROR => 0,
-                CURLOPT_SSL_VERIFYHOST => 0,
-                CURLOPT_SSL_VERIFYPEER => 0,
-                CURLOPT_VERBOSE => 0
-            );
-            if($this->username!==false)
-            {
-                if($this->password===false)
-                    $this->password = '';
-                $options[CURLOPT_USERPWD] = $this->username.':'.$this->password;
-            }
-            curl_setopt_array($curl,$options);
-            $ret = curl_exec($curl);
-            $headers = curl_getinfo($curl);
-            $headers['header'] = substr($ret,0,$headers['header_size']);
-            $ret = substr($ret,$headers['header_size']);
-            $headers['errno'] = curl_errno($curl);
-            $headers['errmsg'] = curl_error($curl);
-            curl_close($curl);
+            if($this->password===false)
+                $this->password = '';
+            $options['headers']['authorization'] = 'Basic '.base64_encode($this->username.':'.$this->password);
         }
-        elseif($method==2)
+        $remote = wp_remote_request($url,$options);
+        if(!isset($remote['body']))
         {
-            $url = str_replace("https://","ssl://",$url);
-            $file = @fopen($url,'r');
-            if($file)
-            {
-                while(!feof($file)){$ret .= fgets($file,4096);}
-                fclose($file);
-            }
-            else
-            {
-                if($retry<1)
-                {
-                    $this->message('<strong>fopen Failure: Retrying</strong>');
-                    return $this->get_url($url,$method,($retry+1));
-                }
-                else
-                {
-                    $this->message('<strong>fopen Failure: Trying curl</strong>');
-                    return $this->get_url($url,1,($retry+1));
-                }
-            }
+            $ret = $remote = false;
         }
-        elseif($method==3)
-            $ret = file_get_contents($url);
         else
-            return false;
-        if(isset($headers['header']))
         {
-            if($headers['http_code']==406)
+            $ret = $remote['body'];
+        }
+        if($remote!==false)
+        {
+            if($remote['response']['code']==406)
             {
-                $this->message('<strong>Unsupported Content-Type</strong> - HTTP Code: '.$headers['http_code'].' / Errno: '.$headers['errno'].' / Errmsg: '.$headers['errmsg']);
+                $this->message('<strong>Unsupported Content-Type</strong> - HTTP Code: '.$remote['response']['code'].' / Message: '.$remote['response']['message']);
                 return 406;
             }
-            if(preg_match('/^Content-Type: (.+?)$/m',$headers['header'],$matches))
+            if(strpos($remote['headers']['content-type'],'text/html')===false)
             {
-                $content_type = trim($matches[1]);
-                if(strpos($content_type,'text/html')===false)
-                {
-                    $this->message('<strong>Unsupported Content-Type</strong>: '.$content_type);
-                    return 406;
-                }
+                $this->message('<strong>Unsupported Content-Type</strong>: '.$remote['headers']['content-type']);
+                return 406;
             }
-        }
-        if(in_array($headers['http_code'],array(301,302)))
-        {
-            if(preg_match('/^Location: (.+?)$/m',$headers['header'],$matches))
+            if(in_array($remote['response']['code'],array(301,302)))
             {
-                if(substr($matches[1],0,1)=="/")
-                    return $parsed['scheme']."://".$parsed['host'].trim($matches[1]);
+                if(substr($remote['headers']['location'],0,1)=="/")
+                    return $parsed['scheme']."://".$parsed['host'].trim($remote['headers']['location']);
                 else
-                    return trim($matches[1]);
+                    return trim($remote['headers']['location']);
+            }
+            elseif($remote['response']['code']!=200)
+            {
+                $this->message('<strong>Error Found</strong> - HTTP Code: '.$remote['response']['code'].' / Message: '.$remote['response']['message']);
+                return $remote['response']['code'];
             }
         }
-        elseif($headers['http_code']!=200||$headers['errno']!=0)
+        if(strlen($ret)<1)
         {
-            $this->message('<strong>Error Found</strong> - HTTP Code: '.$headers['http_code'].' / Errno: '.$headers['errno'].' / Errmsg: '.$headers['errmsg']);
-            if($headers['errno']==28&&$retry<2)
-            {
-                $method = 2;
-                $this->message('<strong>Retrying</strong> - Try #'.($retry+1));
-                return $this->get_url($url,$method,($retry+1));
-            }
-            elseif($retry<1)
-            {
-                $this->message('<strong>Retrying</strong> - Try #'.($retry+1));
-                return $this->get_url($url,$method,($retry+1));
-            }
-            else
-                return $headers['http_code'];
-        }
-        if(empty($ret)&&$ret!=0)
-        {
-            $this->message('<strong>No Data Returned</strong> - HTTP Code: '.$headers['http_code'].' / Errno: '.$headers['errno'].' / Errmsg: '.$headers['errmsg']);
+            $this->message('<strong>No Data Returned</strong> - HTTP Code: '.$remote['response']['code'].' / Message: '.$remote['response']['message']);
             if($retry<2)
             {
                 $this->message('<strong>Retrying</strong> - Try #'.($retry+1));
-                return $this->get_url($url,$method,($retry+1));
+                return $this->get_url($url,($retry+1));
             }
             else
                 return false;
         }
-        if($ret!==false)
-        {
-            $this->current_last_modified = date('Y-m-d H:i:s');
-            if($headers['filetime']!=-1)
-                $this->current_last_modified = date('Y-m-d H:i:s',$headers['filetime']);
-            else
-                $this->lastmod_exclude++;
-            $this->current_size = $headers['size_download'];
-            if($headers['download_content_length']!=-1)
-                $this->current_size = $headers['download_content_length'];
-            $this->current_md5 = md5($ret);
-            $this->current_data = $ret;
-        }
+        $this->current_last_modified = date('Y-m-d H:i:s');
+        if($remote['headers']['date']!=-1)
+            $this->current_last_modified = date('Y-m-d H:i:s',strtotime($remote['headers']['date']));
         else
-            return false;
+            $this->lastmod_exclude++;
+        $this->current_size = $remote['headers']['content-length'];
+        if(isset($remote['headers']['download-content-length'])&&$remote['headers']['download-content-length']!=-1)
+            $this->current_size = $remote['headers']['download-content-length'];
+        $this->current_md5 = md5($ret);
+        $this->current_data = $ret;
         return $url;
     }
     function exclude_url ($url)
@@ -670,16 +592,13 @@ class Search_Engine_Spider
                 $test = array_reverse($test);
                 unset($test[0]);
                 $test = array_reverse($test);
-                $test = implode('#',$url);
+                $test = implode('#',$test);
                 if(in_array($test,$this->links)||in_array($test,$this->links_queued))
                 {
-                    $key = array_search($link,$this->links_queued);
-                    if($key!==false)
-                        unset($this->links_queued[$key]);
                     $this->links_other[] = $url;
                     return false;
                 }
-                elseif(in_array($test,$this->links_other)||in_array($test,$this->links_processed)||in_array($test,$this->links_spidered)||in_array$test,$this->links_excluded)||in_array($test,$this->links_redirected)||in_array($test,$this->links_notfound)||in_array($test,$this->links_servererror)||in_array($test,$this->links_duplicate))
+                elseif(in_array($test,$this->links_other)||in_array($test,$this->links_processed)||in_array($test,$this->links_spidered)||in_array($test,$this->links_excluded)||in_array($test,$this->links_redirected)||in_array($test,$this->links_notfound)||in_array($test,$this->links_servererror)||in_array($test,$this->links_duplicate))
                     return false;
             }
         }
@@ -699,6 +618,8 @@ class Search_Engine_Spider
             $k = 0;
             foreach($links as $link)
             {
+                if(empty($link))
+                    continue;
                 if(in_array($link,$this->links)||in_array($link,$this->links_queued))
                     continue;
                 if(in_array($link,$this->links_other)||in_array($link,$this->links_processed)||in_array($link,$this->links_spidered)||in_array($link,$this->links_excluded)||in_array($link,$this->links_redirected)||in_array($link,$this->links_notfound)||in_array($link,$this->links_servererror)||in_array($link,$this->links_duplicate))
@@ -717,10 +638,9 @@ class Search_Engine_Spider
                 {
                     $check['scheme'] = $this->current_scheme;
                     $check['host'] = $this->current_host;
-                    $link = $check['scheme'].'://'.$check['host'].$link;
-                    if($check['path']=='')
-                        $link .= '/';
+                    $check['path'] = '/'.ltrim($check['path'],'/');
                 }
+                $link = $check['scheme'].'://'.$check['host'].$check['path'].(isset($check['query'])&&!empty($check['query'])?'?'.$check['query']:'');
                 if($check!==false&&isset($check['path']))
                 {
                     if(strpos($check['path'],'../')!==false)
@@ -737,8 +657,10 @@ class Search_Engine_Spider
                         }
                         $exp = array_filter($exp);
                         $exp = array_reverse($exp);
-                        $check['path'] = implode('/',$exp).'/'.str_replace('../','',$check['path']);
+                        $check['path'] = str_replace('//','/','/'.implode('/',$exp).'/'.str_replace('../','',$check['path']));
+                        $link = $check['scheme'].'://'.$check['host'].$check['path'].(isset($check['query'])&&!empty($check['query'])?'?'.$check['query']:'');
                     }
+                    $check['path'] = '/'.ltrim($check['path'],'/');
                     if($this->url_exclusion($check['path'],$link)!==false||$this->url_exclusion($check['path'].'?'.$check['query'],$link)!==false)
                     {
                         if($this->current_host!==false&&$this->current_host!=$check['host'])

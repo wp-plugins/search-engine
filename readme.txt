@@ -3,8 +3,8 @@ Contributors: sc0ttkclark
 Donate link: http://www.scottkclark.com/
 Tags: search engine, spider, index, search, google, buddypress, full search, wordpress search
 Requires at least: 2.9
-Tested up to: 3.0
-Stable tag: 0.5.2
+Tested up to: 3.0.1
+Stable tag: 0.5.3
 
 THIS IS A BETA VERSION - Currently in development - A search engine for WordPress that indexes ALL of your site and provides comprehensive search.
 
@@ -36,6 +36,13 @@ Currently, only .htaccess password protected pages are supported, I'm currently 
 * Disallow many links within section(s) of your site by adding the class nofollow to the element tag(s)
 
 == Changelog ==
+
+= 0.5.3 =
+* Now using wp_remote_request to simplify requests and maximize compatibility with multiple server / php configurations
+* Fixed bug where the Spider doesn't detect it's finished (jQuery iframe issue)
+* Fixed bug where the Spider goes into a loop depending on the URL if containing a hash #
+* Fixed bug in detection of completion of Indexing (showed error in both cases)
+* Minor css bug fixes
 
 = 0.5.2 =
 * Added option to Reset all data, and added ability to edit the Search Engine Token Key
@@ -91,6 +98,13 @@ Currently, only .htaccess password protected pages are supported, I'm currently 
 * First official release to the public as a plugin
 
 == Upgrade Notice ==
+
+= 0.5.3 =
+* Now using wp_remote_request to simplify requests and maximize compatibility with multiple server / php configurations
+* Fixed bug where the Spider doesn't detect it's finished (jQuery iframe issue)
+* Fixed bug where the Spider goes into a loop depending on the URL if containing a hash #
+* Fixed bug in detection of completion of Indexing (showed error in both cases)
+* Minor css bug fixes
 
 = 0.5.2 =
 * Added option to Reset all data, and added ability to edit the Search Engine Token Key
