@@ -104,6 +104,7 @@ CREATE TABLE `wp_searchengine_templates` (
   `max_depth` int(10) NOT NULL,
   `cross_scheme` int(10) unsigned DEFAULT NULL,
   `whitelist_uri_words` longtext NOT NULL,
+  `disable_robots` int(1) NOT NULL,
   `htaccess_username` varchar(255) NOT NULL,
   `htaccess_password` varchar(255) NOT NULL,
   `updated` datetime NOT NULL,

@@ -1,11 +1,11 @@
 <?php
 /*
 Plugin Name: Search Engine
-Plugin URI: http://www.scottkclark.com/wordpress/search-engine/
+Plugin URI: http://scottkclark.com/wordpress/search-engine/
 Description: THIS IS A BETA VERSION - Currently in development - A search engine for WordPress that indexes ALL of your site and provides comprehensive search.
-Version: 0.5.3
+Version: 0.5.5
 Author: Scott Kingsley Clark
-Author URI: http://www.scottkclark.com/
+Author URI: http://scottkclark.com/
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -24,17 +24,19 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 global $wpdb;
 define('SEARCH_ENGINE_TBL',$wpdb->prefix.'searchengine_');
-define('SEARCH_ENGINE_VERSION','053');
-define('SEARCH_ENGINE_URL', WP_PLUGIN_URL . '/search-engine');
-define('SEARCH_ENGINE_DIR', WP_PLUGIN_DIR . '/search-engine');
+define('SEARCH_ENGINE_VERSION','055');
+define('SEARCH_ENGINE_URL',WP_PLUGIN_URL.'/search-engine');
+define('SEARCH_ENGINE_DIR',WP_PLUGIN_DIR.'/search-engine');
 define('SEARCH_ENGINE_XML_SITEMAPS_DIR',WP_CONTENT_DIR.'/xml-sitemaps');
+
+include_once "object-monitoring.php";
 
 function search_engine_init ()
 {
     global $current_user,$wpdb;
     $capabilities = search_engine_capabilities();
     // check version
-    $version = (int)get_option('search_engine_version');
+    $version = intval(get_option('search_engine_version'));
     if(empty($version))
     {
         search_engine_reset();
@@ -48,27 +50,30 @@ function search_engine_init ()
             $wpdb->query("ALTER TABLE `".SEARCH_ENGINE_TBL."templates` ADD COLUMN `cross_scheme` INT unsigned AFTER `max_depth`");
             $wpdb->query("ALTER TABLE `".SEARCH_ENGINE_TBL."queue` ADD COLUMN `shutdown` INT unsigned AFTER `template`");
         }
+        if($version<55)
+        {
+            $wpdb->query("ALTER TABLE `".SEARCH_ENGINE_TBL."templates` ADD COLUMN `disable_robots` INT unsigned AFTER `cross_scheme`");
+        }
         delete_option('search_engine_version');
         add_option('search_engine_version',SEARCH_ENGINE_VERSION);
     }
     // thx gravity forms, great way of integration with members!
-    if ( function_exists( 'members_get_capabilities' ) ){
+    if(function_exists('members_get_capabilities'))
+    {
         add_filter('members_get_capabilities', 'search_engine_get_capabilities');
-        if(current_user_can("search_engine_full_access"))
-            $current_user->remove_cap("search_engine_full_access");
-        $is_admin_with_no_permissions = current_user_can("administrator") && !search_engine_current_user_can_any(search_engine_capabilities());
-        if($is_admin_with_no_permissions)
+        if(current_user_can('search_engine_full_access'))
+            $current_user->remove_cap('search_engine_full_access');
+        if(current_user_can('administrator')&&!search_engine_current_user_can_any(search_engine_capabilities()))
         {
-            $role = get_role("administrator");
+            $role = get_role('administrator');
             foreach($capabilities as $cap)
                 $role->add_cap($cap);
         }
     }
     else
     {
-        $search_engine_full_access = current_user_can("administrator") ? "search_engine_full_access" : "";
-        $search_engine_full_access = apply_filters("search_engine_full_access", $search_engine_full_access);
-
+        $search_engine_full_access = (current_user_can('administrator')?'search_engine_full_access':'');
+        $search_engine_full_access = apply_filters('search_engine_full_access',$search_engine_full_access);
         if(!empty($search_engine_full_access))
             $current_user->add_cap($search_engine_full_access);
     }
@@ -328,6 +333,13 @@ function search_engine_wizard ()
                     <textarea name="whitelist_uri_words" rows="10" cols="50" id="whitelist_uri_words" class="large-text code"></textarea>
                 </td>
             </tr>
+            <tr valign="top">
+                <th scope="row"><label for="disable_robots">Disregard "Robots"-specific Rules</label></th>
+                <td>
+                    <input name="disable_robots" type="checkbox" id="disable_robots" value="1" class="small-text" />
+                    <span class="description">Don't follow robots.txt and other meta/link robot-related rules</span>
+                </td>
+            </tr>
         </table>
         <h3>Password Protected Content (htaccess-only)</h3>
         <p>If parts / all of your site is  password protected content through an htaccess file and you want to scan those pages, please enter your username and password below.</p>
@@ -425,6 +437,7 @@ function search_engine_wizard_run ()
             $form_columns[] = 'blacklist_words';
             $form_columns[] = 'blacklist_uri_words';
             $form_columns[] = 'whitelist_uri_words';
+            $form_columns[] = 'disable_robots';
             $form_columns[] = 'htaccess_username';
             $form_columns[] = 'htaccess_password';
             $admin = new WP_Admin_UI(array('api'=>true,'do'=>'create','item'=>'Index Template','items'=>'Index Templates','table'=>SEARCH_ENGINE_TBL.'templates','columns'=>$columns,'form_columns'=>$form_columns,'icon'=>SEARCH_ENGINE_URL.'/assets/icons/search_32.png','custom'=>array('form'=>'search_engine_index_form','action_end_view'=>'search_engine_index_run','header'=>'search_engine_index_header')));
@@ -504,7 +517,7 @@ function search_engine_index_templates ()
     }
     require_once SEARCH_ENGINE_DIR.'/wp-admin-ui/Admin.class.php';
     $columns = array('site'=>array('custom_relate'=>array('table'=>SEARCH_ENGINE_TBL.'sites','what'=>'host','is'=>'site')),'indexed'=>array('label'=>'Last Indexed','type'=>'date'),'updated'=>array('label'=>'Last Modified','type'=>'date'),'id'=>array('label'=>'Template ID'));
-    $admin = new WP_Admin_UI(array('item'=>'Index Template','items'=>'Index Templates','table'=>SEARCH_ENGINE_TBL.'templates','columns'=>$columns,'icon'=>SEARCH_ENGINE_URL.'/assets/icons/search_32.png','custom'=>array('action_end_view'=>'search_engine_index_run','header'=>'search_engine_index_header','reindex'=>array('label'=>'Reindex','link'=>'admin.php?page=search-engine&action=run&template_id={@id}')),'edit'=>false,'save'=>false,'add'=>false));
+    $admin = new WP_Admin_UI(array('item'=>'Index Template','items'=>'Index Templates','table'=>SEARCH_ENGINE_TBL.'templates','columns'=>$columns,'icon'=>SEARCH_ENGINE_URL.'/assets/icons/search_32.png','custom'=>array('action_end_view'=>'search_engine_index_run','header'=>'search_engine_index_header','index'=>array('label'=>'Index Again','link'=>'admin.php?page=search-engine&action=run&template_id={@id}'),'reindex'=>array('label'=>'Reindex','link'=>'admin.php?page=search-engine&action=run&template_id={@id}&reindex=1')),'edit'=>false,'save'=>false,'add'=>false));
     $admin->go();
 ?>
 <?php
@@ -536,7 +549,7 @@ function search_engine_index_form ($obj,$create=0)
     }
     else
     {
-        $obj->row = array('max_depth'=>'','scheme'=>'','blacklist_words'=>'','blacklist_uri_words'=>'','whitelist_uri_words'=>'','htaccess_username'=>'','htaccess_password'=>'');
+        $obj->row = array('max_depth'=>'','scheme'=>'','blacklist_words'=>'','blacklist_uri_words'=>'','whitelist_uri_words'=>'','disable_robots'=>'','htaccess_username'=>'','htaccess_password'=>'');
     }
  ?>
     <div style="height:20px;"></div>
@@ -712,6 +725,13 @@ function search_engine_index_form ($obj,$create=0)
                 <td>
                     <p>Whitelisted URLs will be the only ones that the search engine will scan. You may include URLs, URIs, or Keywords to be included. These should be separated with a comma.</p>
                     <textarea name="whitelist_uri_words" rows="10" cols="50" id="whitelist_uri_words" class="large-text code"><?php echo $obj->row['whitelist_uri_words']; ?></textarea>
+                </td>
+            </tr>
+            <tr valign="top">
+                <th scope="row"><label for="disable_robots">Disregard "Robots"-specific Rules</label></th>
+                <td>
+                    <input name="disable_robots" type="checkbox" id="disable_robots" value="1" class="small-text"<?php echo ($obj->row['disable_robots']==1?' CHECKED':''); ?> />
+                    <span class="description">Don't follow robots.txt and other meta/link robot-related rules</span>
                 </td>
             </tr>
         </table>
@@ -918,6 +938,7 @@ function search_engine_about ()
                     </li
                     <li><strong>Index</strong>
                         <ul>
+                            <li>Object Monitoring - When you Add / Edit / Delete and WP Post + Page + CPT item, Search Engine will automatically make the adjustment in the Index (by Adding, Updating, or Removing the link + content in the Index)</li>
                             <li>Keyword Extraction - Get keywords from pages from &lt;title&gt;,  &lt;meta name="description"&gt;, &lt;meta name="keywords"&gt;, and &lt;body&gt; tags</li>
                             <li>Keyword Blacklist - Exclude Keywords from being Indexed</li>
                             <li>Index Weight Assignment - Based on how often keywords are used, and in which places they are found, a weight is given to a URL to create relevancy</li>
@@ -1112,8 +1133,8 @@ function search_engine_content ($atts=false)
 <div id="search_engine_Area">
 <form action="<?php echo $_SERVER['REQUEST_URI']; ?>" method="get">
     <input name="<?php echo (!wp_style_is('search-engine')?'q':'s'); ?>" type="text" size="41" class="search_engine_Box" value="<?php echo htmlentities($query,ENT_COMPAT,get_bloginfo('charset')); ?>" />
-    <input type="submit" value="Search" class="search_engine_Button" /><?php if(defined('SEARCH_ENGINE_ADVANCED_URL')){ ?><br />
-    <a href="<?php echo SEARCH_ENGINE_ADVANCED_URL; ?>" class="search_engine_Advanced">Go to Advanced Search</a><?php } ?>
+    <input type="submit" value="Search" class="search_engine_Button" /><?php if(defined('SEARCH_ENGINE_ADVANCED_URL')){ ?><br /><br /><?php if(defined('SEARCH_ENGINE_ADVANCED_HTML')){ echo SEARCH_ENGINE_ADVANCED_HTML; }else{ ?>
+    <a href="<?php echo SEARCH_ENGINE_ADVANCED_URL; ?>" class="search_engine_Advanced"><?php if(define('SEARCH_ENGINE_ADVANCED_TEXT')){ echo SEARCH_ENGINE_ADVANCED_TEXT; }else{ ?>Go to Advanced Search<?php } ?></a><?php }} ?>
 </form>
 <?php
     if(0<strlen($query))

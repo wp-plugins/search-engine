@@ -9,6 +9,7 @@ if(!is_object($wpdb))
 
 class Search_Engine_API
 {
+    var $silent = false;
     var $tables = array('index','keywords','links','log','sites','groups','templates','queue');
 
     function __construct ()
@@ -22,7 +23,10 @@ class Search_Engine_API
     }
     function message ($msg)
     {
-        echo date('m/d/Y h:i:sa').' - '.$msg."<br />\r\n";
+        $msg = date('m/d/Y h:i:sa').' - '.$msg."<br />\r\n";
+        if(false===$this->silent)
+            echo $msg;
+        return $msg;
     }
     function sanitize ($var)
     {
@@ -34,20 +38,56 @@ class Search_Engine_API
         {
             if(!isset($params[$index]))
             {
-                $this->message("<strong>The '$index' option is required for this function</strong>");
+                $msg = $this->message("<strong>The '$index' option is required for this function</strong>");
+                if(false!==$this->silent)
+                    return $msg;
                 return false;
             }
         }
         return true;
     }
-    function get_page ($url,$params)
+    function spider_page ($params)
     {
-        if(false===$this->validate($params,array('url','site')))
+        if(false===$this->validate($params,array('url')))
+            return false;
+        require_once "Spider.class.php";
+        $url = @parse_url($params['url']);
+        if(false===$url)
             return false;
         global $wpdb;
-        $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM $this->table_links WHERE `url`=%s AND `site`=%d",array($params['url'],$params['site'])),ARRAY_A);
-        if(!empty($row))
-            return $row;
+        $data = $wpdb->get_results('SELECT id,host,scheme FROM '.SEARCH_ENGINE_TBL.'sites WHERE scheme="'.$url['scheme'].'" AND host="'.$url['host'].'" ORDER BY CONCAT(scheme,"://",host)',ARRAY_A);
+        $data_index = $wpdb->get_results('SELECT t.id,t.site,s.scheme,s.host,t.directory FROM '.SEARCH_ENGINE_TBL.'templates AS t LEFT JOIN '.SEARCH_ENGINE_TBL.'sites AS s ON s.id=t.site WHERE s.scheme="'.$url['scheme'].'" AND s.host="'.$url['host'].'" ORDER BY CONCAT(s.scheme,"://",s.host,t.directory)',ARRAY_A);
+        $spider = new Search_Engine_Spider();
+        $spider->silent = $this->silent;
+        if(!empty($data)) foreach($data as $row)
+        {
+            $spider->set_site($row['id']);
+            break;
+        }
+        if(!empty($data_index)) foreach($data_index as $row)
+        {
+            $spider->set_template($row['id']);
+            $spider->set_site($row['site']);
+            break;
+        }
+        if($spider->site_id!==false)
+        {
+            if(!isset($params['max_depth']))
+            {
+                $spider->max_depth = 1;
+            }
+            return $spider->spider($params['url']);
+        }
+        return false;
+    }
+    function get_page ($params)
+    {
+        if(false===$this->validate($params,array('url')))
+            return false;
+        global $wpdb;
+        $results = $wpdb->get_results($wpdb->prepare("SELECT * FROM $this->table_links WHERE `url`=%s",array($params['url'])),ARRAY_A);
+        if(!empty($results))
+            return $results;
         else
             return false;
     }
@@ -71,15 +111,15 @@ class Search_Engine_API
             return false;
         }
         global $wpdb;
-        $link_id = @current($wpdb->get_col($wpdb->prepare("SELECT `id` FROM $this->table_links WHERE `url`=%s AND `site`=%d",array($params['url'], $params['site']))));
-        if(is_numeric($link_id))
+        $page_id = @current($wpdb->get_col($wpdb->prepare("SELECT `id` FROM $this->table_links WHERE `url`=%s AND `site`=%d",array($params['url'], $params['site']))));
+        if(is_numeric($page_id))
         {
-            $wpdb->query($wpdb->prepare("UPDATE $this->table_links SET `title`=%s,`description`=%s,`fulltxt`=%s,`lastmod`=%s,`updated`=FROM_UNIXTIME(UNIX_TIMESTAMP()),`size`=%d,`md5_checksum`=%s,`level`=%d WHERE id=$link_id",
+            $wpdb->query($wpdb->prepare("UPDATE $this->table_links SET `title`=%s,`description`=%s,`fulltxt`=%s,`lastmod`=%s,`updated`=FROM_UNIXTIME(UNIX_TIMESTAMP()),`size`=%d,`md5_checksum`=%s,`level`=%d WHERE id=$page_id",
                     array($params['title'], $params['description'], $params['fulltxt'], $params['lastmod'], $params['size'], $params['md5_checksum'], $params['level'])));
-            $wpdb->query($wpdb->prepare("DELETE FROM $this->table_index WHERE `link`=%d AND `keyword`=%d AND `site`=%d",array($link_id, $keyword_id, $params['site'])));
+            $wpdb->query($wpdb->prepare("DELETE FROM $this->table_index WHERE `link`=%d AND `keyword`=%d AND `site`=%d",array($page_id, $keyword_id, $params['site'])));
             foreach($params['keywords'] as $keyword_id=>$weight)
             {
-                $wpdb->query($wpdb->prepare("INSERT INTO $this->table_index (`link`,`keyword`,`weight`,`site`) VALUES ( %d, %d, %d, %d )",array($link_id, $keyword_id, $weight, $params['site'])));
+                $wpdb->query($wpdb->prepare("INSERT INTO $this->table_index (`link`,`keyword`,`weight`,`site`) VALUES ( %d, %d, %d, %d )",array($page_id, $keyword_id, $weight, $params['site'])));
             }
             return true;
         }
@@ -87,10 +127,10 @@ class Search_Engine_API
         {
             $wpdb->query($wpdb->prepare("INSERT INTO $this->table_links (`site`,`url`,`title`,`description`,`fulltxt`,`lastmod`, `indexed`,`updated`,`size`,`md5_checksum`,`level`) VALUES ( %d, %s, %s, %s, %s, %s, FROM_UNIXTIME(UNIX_TIMESTAMP()), FROM_UNIXTIME(UNIX_TIMESTAMP()), %d, %s, %d )",
                     array($params['site'], $params['url'], $params['title'], $params['description'], $params['fulltxt'], $params['lastmod'], $params['size'], $params['md5_checksum'], $params['level'])));
-            $link_id = $wpdb->insert_id;
+            $page_id = $wpdb->insert_id;
             foreach($params['keywords'] as $keyword_id=>$weight)
             {
-                $index_id = @current($wpdb->get_col($wpdb->prepare("SELECT `id` FROM $this->table_index WHERE `link`=%d AND `keyword`=%d AND `site`=%d",array($link_id, $keyword_id, $params['site']))));
+                $index_id = @current($wpdb->get_col($wpdb->prepare("SELECT `id` FROM $this->table_index WHERE `link`=%d AND `keyword`=%d AND `site`=%d",array($page_id, $keyword_id, $params['site']))));
                 if(is_numeric($index_id))
                 {
                     $wpdb->query($wpdb->prepare("UPDATE $this->table_index SET `weight`=%d WHERE id=$index_id",
@@ -99,24 +139,41 @@ class Search_Engine_API
                 else
                 {
                     $wpdb->query($wpdb->prepare("INSERT INTO $this->table_index (`link`,`keyword`,`weight`,`site`) VALUES ( %d, %d, %d, %d )",
-                            array($link_id, $keyword_id, $weight, $params['site'])));
+                            array($page_id, $keyword_id, $weight, $params['site'])));
                 }
             }
-            return $link_id;
+            return $page_id;
         }
     }
     function delete_page ($params)
     {
-        if(false===$this->validate($params,array('url','site')))
+        if(!isset($params['id'])&&!isset($params['pages']))
         {
-            return false;
+            if(false===$this->validate($params,array('url')))
+            {
+                return false;
+            }
         }
         global $wpdb;
-        $link_id = @current($wpdb->get_col($wpdb->prepare("SELECT `id` FROM $this->table_links WHERE `url`=%s AND `site`=%d",array($params['url'], $params['site']))));
-        if(is_numeric($link_id))
+        if(isset($params['id']))
         {
-            $wpdb->query("DELETE FROM $this->table_links WHERE id=$link_id");
-            $wpdb->query("DELETE FROM $this->table_index WHERE link=$link_id");
+            $pages = array(array('id'=>$params['id']));
+        }
+        elseif(isset($params['pages']))
+        {
+            $pages = $params['pages'];
+        }
+        else
+        {
+            $pages = $this->get_page($params);
+        }
+        if(!empty($pages))
+        {
+            foreach($pages as $page)
+            {
+                $wpdb->query("DELETE FROM $this->table_links WHERE id={$page['id']}");
+                $wpdb->query("DELETE FROM $this->table_index WHERE link={$page['id']}");
+            }
             return true;
         }
         return false;
@@ -155,8 +212,8 @@ class Search_Engine_API
         {
             $wpdb->query($wpdb->prepare("INSERT INTO $this->table_queue (`site`,`template`,`added`,`updated`,`queue`) VALUES ( %d, %d, FROM_UNIXTIME(UNIX_TIMESTAMP()), FROM_UNIXTIME(UNIX_TIMESTAMP()), %s )",
                     array($params['site'], $params['template'], $params['queue'])));
-            $link_id = $wpdb->insert_id;
-            return $link_id;
+            $page_id = $wpdb->insert_id;
+            return $page_id;
         }
     }
     function delete_queue ($params)

@@ -1,10 +1,10 @@
 === Search Engine ===
 Contributors: sc0ttkclark
-Donate link: http://www.scottkclark.com/
+Donate link: http://scottkclark.com/
 Tags: search engine, spider, index, search, google, buddypress, full search, wordpress search
 Requires at least: 2.9
-Tested up to: 3.0.1
-Stable tag: 0.5.3
+Tested up to: 3.1
+Stable tag: 0.5.5
 
 THIS IS A BETA VERSION - Currently in development - A search engine for WordPress that indexes ALL of your site and provides comprehensive search.
 
@@ -12,13 +12,15 @@ THIS IS A BETA VERSION - Currently in development - A search engine for WordPres
 
 **THIS IS A BETA VERSION - Currently in development**
 
-**OFFICIAL SUPPORT** - Search Engine - Support Forums: http://www.scottkclark.com/forums/search-engine/
+**OFFICIAL SUPPORT** - Search Engine - Support Forums: http://scottkclark.com/forums/search-engine/
 
 This is a Search Engine for WordPress that indexes pages on a site and provides comprehensive search functionality.
 
 All you do is install the plugin, and index your site. You can setup cronjobs to reindex hourly, daily, or weekly on your Server - or do it manually on an as needed basis. Indexing covers Full Pages as the visitor sees them.
 
 So... that means Sidebars, Widgets, Pages, Posts, Custom Post Types, Pod Pages, Plugin Generated Content, Title tags, Meta tags, Template code, and anything else your visitor can see anywhere on your site is indexed and searchable.
+
+This plugin can also index and search content that exists outside of your WordPress site, such as on other domains / sub-domains or other parts of your site external to WordPress. The search feature is currently limited to a single 'site' (domain/sub-domain) per search, so you can't search across multiple sites **yet**.
 
 == Frequently Asked Questions ==
 
@@ -36,6 +38,10 @@ Currently, only .htaccess password protected pages are supported, I'm currently 
 * Disallow many links within section(s) of your site by adding the class nofollow to the element tag(s)
 
 == Changelog ==
+
+= 0.5.5 =
+* Added Object Monitoring code, this is basic right now - Just WP Posts / Pages / CPT - Pods support coming when Pods 2.0 is released.
+* Lots of bug fixes
 
 = 0.5.3 =
 * Now using wp_remote_request to simplify requests and maximize compatibility with multiple server / php configurations
@@ -98,6 +104,10 @@ Currently, only .htaccess password protected pages are supported, I'm currently 
 * First official release to the public as a plugin
 
 == Upgrade Notice ==
+
+= 0.5.5 =
+* Added Object Monitoring code, this is basic right now - Just WP Posts / Pages / CPT - Pods support coming when Pods 2.0 is released.
+* Lots of bug fixes
 
 = 0.5.3 =
 * Now using wp_remote_request to simplify requests and maximize compatibility with multiple server / php configurations
@@ -170,7 +180,7 @@ OR you can just install it with WordPress by going to Plugins >> Add New >> and 
 
 == Official Support ==
 
-Search Engine - Support Forums: http://www.scottkclark.com/forums/search-engine/
+Search Engine - Support Forums: http://scottkclark.com/forums/search-engine/
 
 == About the Plugin Author ==
 

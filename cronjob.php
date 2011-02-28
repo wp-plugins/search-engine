@@ -1,5 +1,6 @@
 <?php
 global $wpdb;
+//define('WP_DEBUG',true);
 if(!is_object($wpdb))
 {
     ob_start();
@@ -37,16 +38,16 @@ if($spider->site_id!==false)
             {
                 $spider->$var_name = $var_value;
             }
-            $spider->munch($spider->links_current,$spider->current_depth);
+            $result = $spider->munch($spider->links_current,$spider->current_depth);
         }
         else
         {
-            $spider->spider();
+            $result = $spider->spider();
         }
     }
     else
     {
-        $spider->spider();
+        $result = $spider->spider();
     }
 }
 else

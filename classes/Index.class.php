@@ -3,6 +3,8 @@ require_once "Simple.HTML.DOM.Parser.php";
 
 class Search_Engine_Index
 {
+    var $robots_ignore = false;
+
     var $content = false;
     var $keywords = false;
     var $keyword_counts = false;
@@ -165,7 +167,10 @@ class Search_Engine_Index
     }
     function get_content ($html,$url)
     {
-        $tags = get_tag_data($html,array('img','a'));
+        $filters = false;
+        if(false!==$this->robots_ignore)
+            $filters = array('a'=>array('rel'=>array('searchengine_nofollow','searchengine_noindex')));
+        $tags = get_tag_data($html,array('img','a'),false,$filters);
         $parsed = parse_url($url);
         $additional_content = array();
         if(!empty($tags)) foreach($tags as $tag=>$items)

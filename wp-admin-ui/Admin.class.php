@@ -44,9 +44,9 @@ if(isset($_GET['download'])&&!isset($_GET['page'])&&is_user_logged_in())
  *
  * @package Admin UI for Plugins
  *
- * @version 1.7.1
+ * @version 1.7.6
  * @author Scott Kingsley Clark
- * @link http://www.scottkclark.com/
+ * @link http://scottkclark.com/
  *
  * @param mixed $options
  */
@@ -98,6 +98,7 @@ class WP_Admin_UI
     var $data = array();
     var $full_data = array();
     var $row = array();
+    var $default_none = false;
     var $search_columns = array();
     var $form_columns = array();
     var $view_columns = array();
@@ -215,7 +216,7 @@ class WP_Admin_UI
             return $args[1];
         return false;
     }
-    function var_update($array=false,$allowed=false,$url=false)
+    function var_update ($array=false,$allowed=false,$url=false,$exclusive=false)
     {
         $excluded = array('do','id','pg','search_query','order','order_dir','limit','action','export','export_type','export_delimiter','remove_export','updated','duplicate');
         if(false===$allowed)
@@ -226,14 +227,19 @@ class WP_Admin_UI
             $get = $_GET;
         if(is_array($array))
         {
-            foreach($excluded as $exclusion)
-                if(!isset($array[$exclusion])&&!in_array($exclusion,$allowed))
-                    unset($get[$exclusion]);
+            if(false===$exclusive)
+            {
+                foreach($excluded as $exclusion)
+                    if(isset($get[$exclusion])&&!isset($array[$exclusion])&&!in_array($exclusion,$allowed))
+                        unset($get[$exclusion]);
+            }
+            else
+                $get = array();
             foreach($array as $key=>$val)
             {
                 if(0<strlen($val))
                     $get[$key] = $val;
-                else
+                elseif(isset($get[$key]))
                     unset($get[$key]);
             }
         }
@@ -366,6 +372,8 @@ class WP_Admin_UI
                     $attributes['type'] = 'text';
                 if('related'!=$attributes['type']||!isset($attributes['related']))
                     $attributes['related'] = false;
+                if('related'!=$attributes['type']||!isset($attributes['related_id']))
+                    $attributes['related_id'] = 'id';
                 if('related'!=$attributes['type']||!isset($attributes['related_field']))
                     $attributes['related_field'] = 'name';
                 if('related'!=$attributes['type']||!isset($attributes['related_multiple']))
@@ -408,8 +416,12 @@ class WP_Admin_UI
                     $this->filters[] = $column;
                 if(false===$attributes['filter']||!isset($attributes['filter_label'])||!in_array($column,$this->filters))
                     $attributes['filter_label'] = $attributes['label'];
+                if(false===$attributes['filter']||!isset($attributes['filter_default'])||!in_array($column,$this->filters))
+                    $attributes['filter_default'] = false;
                 if(false===$attributes['filter']||!isset($attributes['date_ongoing'])||!in_array($attributes['type'],array('date','time','datetime'))||!in_array($column,$this->filters))
                     $attributes['date_ongoing'] = false;
+                if(false===$attributes['filter']||!isset($attributes['date_ongoing'])||!in_array($attributes['type'],array('date','time','datetime'))||!isset($attributes['date_ongoing_default'])||!in_array($column,$this->filters))
+                    $attributes['date_ongoing_default'] = false;
                 if(!isset($attributes['export']))
                     $attributes['export'] = true;
                 if(!isset($attributes['group_related']))
@@ -418,14 +430,14 @@ class WP_Admin_UI
                     $attributes['comments'] = '';
                 if(!isset($attributes['comments_top']))
                     $attributes['comments_top'] = false;
-                if(!isset($attributes['custom_view']))
-                    $attributes['custom_view'] = false;
                 if(!isset($attributes['custom_input']))
                     $attributes['custom_input'] = false;
                 if(!isset($attributes['custom_display']))
                     $attributes['custom_display'] = false;
                 if(!isset($attributes['custom_form_display']))
                     $attributes['custom_form_display'] = false;
+                if(!isset($attributes['custom_view']))
+                    $attributes['custom_view'] = $attributes['custom_display'];
                 $new_columns[$column] = $attributes;
             }
             $columns = $new_columns;
@@ -436,6 +448,10 @@ class WP_Admin_UI
                 $this->form_columns = $this->setup_columns($this->form_columns,'form_columns');
             else
                 $this->form_columns = $columns;
+            if(!empty($this->view_columns)&&$this->view)
+                $this->view_columns = $this->setup_columns($this->view_columns,'view_columns');
+            else
+                $this->view_columns = $this->form_columns;
             if(!empty($this->search_columns)&&$this->search)
                 $this->search_columns = $this->setup_columns($this->search_columns,'search_columns');
             else
@@ -732,12 +748,10 @@ class WP_Admin_UI
     <h2><?php echo $this->heading['view']; ?> <?php echo $this->item; ?> <small>(<a href="<?php echo $this->var_update(array('action'=>'manage','id'=>'')); ?>">&laquo; Back to Manage</a>)</small></h2>
     <table class="form-table">
 <?php
-        foreach($this->form_columns as $column=>$attributes)
+        foreach($this->view_columns as $column=>$attributes)
         {
             if(!isset($this->row[$column]))
                 $this->row[$column] = '';
-            if($attributes['type']=='bool')
-                $selected = ($this->row[$column]==1?' CHECKED':'');
             if(false===$attributes['display'])
                 continue;
 ?>
@@ -745,25 +759,27 @@ class WP_Admin_UI
             <th scope="row"><label for="admin_ui_<?php echo $column; ?>"><?php echo $attributes['label']; ?></label></th>
             <td>
 <?php
-            if(!empty($attributes['comments'])&&false!==$attributes['comments_top'])
-            {
-?>
-            <span class="description"><?php echo $attributes['comments']; ?></span>
-<?php
-            }
             if(false!==$attributes['custom_view']&&function_exists("{$attributes['custom_view']}"))
             {
-                $attributes['custom_view']($column,$attributes,$this);
+                echo $attributes['custom_view']($this->row[$column],$this->row,$column,$attributes,$this);
 ?>
             </td>
         </tr>
 <?php
                 continue;
             }
-            if($attributes['type']=='bool')
-            {
+            if('date'==$attributes['type'])
+                $this->row[$column] = date_i18n('Y/m/d',strtotime($this->row[$column]));
+            elseif('time'==$attributes['type'])
+                $this->row[$column] = date_i18n('g:i:s A',strtotime($this->row[$column]));
+            elseif('datetime'==$attributes['type'])
+                $this->row[$column] = date_i18n('Y/m/d g:i:s A',strtotime($this->row[$column]));
+            elseif($attributes['type']=='bool')
                 $this->row[$column] = ($this->row[$column]==1?'Yes':'No');
-            }
+            elseif($attributes['type']=='number')
+                $this->row[$column] = intval($this->row[$column]);
+            elseif($attributes['type']=='decimal')
+                $this->row[$column] = number_format($this->row[$column],2);
             elseif($attributes['type']=='related'&&false!==$attributes['related'])
             {
                 $old_value = $this->row[$column];
@@ -868,10 +884,10 @@ class WP_Admin_UI
                 if($attributes['type']=='time')
                     $format = "H:i:s";
                 if(false!==$attributes['date_touch']||(false!==$attributes['date_touch_on_create']&&$create==1&&$this->id<1))
-                    $value = date($format);
+                    $value = date_i18n($format);
                 else
                 {
-                    $value = date($format,strtotime(($attributes['type']=='time'?date('Y-m-d '):'').$_POST[$column]));
+                    $value = date_i18n($format,strtotime(($attributes['type']=='time'?date_i18n('Y-m-d '):'').$_POST[$column]));
                 }
             }
             else
@@ -948,6 +964,44 @@ class WP_Admin_UI
             $this->error('<strong>Error:</strong> Order has not been updated.');
         $this->do_hook('post_reorder',$this->insert_id,$data);
     }
+    function field_value ($value,$field_name,$attributes)
+    {
+        global $wpdb;
+        if('date'==$attributes['type'])
+            $value = date_i18n('Y/m/d',strtotime($value));
+        elseif('time'==$attributes['type'])
+            $value = date_i18n('g:i:s A',strtotime($value));
+        elseif('datetime'==$attributes['type'])
+            $value = date_i18n('Y/m/d g:i:s A',strtotime($value));
+        elseif('related'==$attributes['type']&&false!==$attributes['related'])
+        {
+            $column_data = array();
+            if(!is_array($attributes['related']))
+            {
+                $related = $wpdb->get_results('SELECT `'.$attributes['related_id'].'`,`'.$attributes['related_field'].'` FROM '.$attributes['related'].(!empty($attributes['related_sql'])?' '.$attributes['related_sql']:''));
+                $selected_options = explode(',',$value);
+                foreach($related as $option)
+                    if(in_array($option->{$attributes['related_id']},$selected_options))
+                        $column_data[$option->{$attributes['related_id']}] = $option->{$attributes['related_field']};
+            }
+            else
+            {
+                $related = $attributes['related'];
+                $selected_options = explode(',',$value);
+                foreach($related as $option_id=>$option)
+                    if(in_array($option_id,$selected_options))
+                        $column_data[$option_id] = $option;
+            }
+            $value = implode(', ',$column_data);
+        }
+        elseif($attributes['type']=='bool')
+            $value = ($value==1?'Yes':'No');
+        elseif($attributes['type']=='number')
+            $value = intval($value);
+        elseif($attributes['type']=='decimal')
+            $value = number_format($value,2);
+        return $value;
+    }
     function export ()
     {
         $this->do_hook('pre_export');
@@ -1014,7 +1068,7 @@ class WP_Admin_UI
         {
             if($this->export_type=='csv')
             {
-                $export_file = str_replace('-','_',sanitize_title($this->items)).'_'.date('m-d-Y_h-i-sa').'.csv';
+                $export_file = str_replace('-','_',sanitize_title($this->items)).'_'.date_i18n('m-d-Y_h-i-sa').'.csv';
                 $fp = fopen($this->export_dir.'/'.$export_file,'a+');
                 $head = array();
                 $first = true;
@@ -1037,8 +1091,9 @@ class WP_Admin_UI
                     {
                         if(false===$attributes['display']&&false===$attributes['export'])
                             continue;
+                        $item[$key] = $this->field_value($item[$key],$key,$attributes);
                         if(false!==$attributes['custom_display']&&function_exists("{$attributes['custom_display']}"))
-                            $item[$key] = $attributes['custom_display']($item[$key],$item,$this);
+                            $item[$key] = $attributes['custom_display']($item[$key],$item,$key,$attributes,$this);
                         $line[] = str_replace(array("\r","\n"),' ',$item[$key]);
                     }
                     fputcsv($fp,$line);
@@ -1049,7 +1104,7 @@ class WP_Admin_UI
             }
             elseif($this->export_type=='tsv')
             {
-                $export_file = str_replace('-','_',sanitize_title($this->items)).'_'.date('m-d-Y_h-i-sa').'.tsv';
+                $export_file = str_replace('-','_',sanitize_title($this->items)).'_'.date_i18n('m-d-Y_h-i-sa').'.tsv';
                 $fp = fopen($this->export_dir.'/'.$export_file,'a+');
                 $head = array();
                 $first = true;
@@ -1072,8 +1127,9 @@ class WP_Admin_UI
                     {
                         if(false===$attributes['display']&&false===$attributes['export'])
                             continue;
+                        $item[$key] = $this->field_value($item[$key],$key,$attributes);
                         if(false!==$attributes['custom_display']&&function_exists("{$attributes['custom_display']}"))
-                            $item[$key] = $attributes['custom_display']($item[$key],$item,$this);
+                            $item[$key] = $attributes['custom_display']($item[$key],$item,$key,$attributes,$this);
                         $line[] = str_replace(array("\r","\n"),' ',$item[$key]);
                     }
                     fputcsv($fp,$line,"\t");
@@ -1084,7 +1140,7 @@ class WP_Admin_UI
             }
             elseif($this->export_type=='pipe')
             {
-                $export_file = str_replace('-','_',sanitize_title($this->items)).'_'.date('m-d-Y_h-i-sa').'.txt';
+                $export_file = str_replace('-','_',sanitize_title($this->items)).'_'.date_i18n('m-d-Y_h-i-sa').'.txt';
                 $fp = fopen($this->export_dir.'/'.$export_file,'a+');
                 $head = array();
                 $first = true;
@@ -1107,8 +1163,9 @@ class WP_Admin_UI
                     {
                         if(false===$attributes['display']&&false===$attributes['export'])
                             continue;
+                        $item[$key] = $this->field_value($item[$key],$key,$attributes);
                         if(false!==$attributes['custom_display']&&function_exists("{$attributes['custom_display']}"))
-                            $item[$key] = $attributes['custom_display']($item[$key],$item,$this);
+                            $item[$key] = $attributes['custom_display']($item[$key],$item,$key,$attributes,$this);
                         $line[] = str_replace(array("\r","\n"),' ',$item[$key]);
                     }
                     fputcsv($fp,$line,"|");
@@ -1119,7 +1176,7 @@ class WP_Admin_UI
             }
             elseif($this->export_type=='custom')
             {
-                $export_file = str_replace('-','_',sanitize_title($this->items)).'_'.date('m-d-Y_h-i-sa').'.txt';
+                $export_file = str_replace('-','_',sanitize_title($this->items)).'_'.date_i18n('m-d-Y_h-i-sa').'.txt';
                 $fp = fopen($this->export_dir.'/'.$export_file,'a+');
                 $head = array();
                 $first = true;
@@ -1142,8 +1199,9 @@ class WP_Admin_UI
                     {
                         if(false===$attributes['display']&&false===$attributes['export'])
                             continue;
+                        $item[$key] = $this->field_value($item[$key],$key,$attributes);
                         if(false!==$attributes['custom_display']&&function_exists("{$attributes['custom_display']}"))
-                            $item[$key] = $attributes['custom_display']($item[$key],$item,$this);
+                            $item[$key] = $attributes['custom_display']($item[$key],$item,$key,$attributes,$this);
                         $line[] = str_replace(array("\r","\n"),' ',$item[$key]);
                     }
                     fputcsv($fp,$line,"$this->export_delimiter");
@@ -1154,7 +1212,7 @@ class WP_Admin_UI
             }
             elseif($this->export_type=='xml')
             {
-                $export_file = str_replace('-','_',sanitize_title($this->items)).'_'.date('m-d-Y_h-i-sa').'.xml';
+                $export_file = str_replace('-','_',sanitize_title($this->items)).'_'.date_i18n('m-d-Y_h-i-sa').'.xml';
                 $fp = fopen($this->export_dir.'/'.$export_file,'a+');
                 $head = '<'.'?'.'xml version="1.0" encoding="'.get_bloginfo('charset').'" '.'?'.'>'."\r\n<items count=\"".count($this->full_data)."\">\r\n";
                 $head = substr($head,0,-1);
@@ -1166,8 +1224,9 @@ class WP_Admin_UI
                     {
                         if(false===$attributes['display']&&false===$attributes['export'])
                             continue;
+                        $item[$key] = $this->field_value($item[$key],$key,$attributes);
                         if(false!==$attributes['custom_display']&&function_exists("{$attributes['custom_display']}"))
-                            $item[$key] = $attributes['custom_display']($item[$key],$item,$this);
+                            $item[$key] = $attributes['custom_display']($item[$key],$item,$key,$attributes,$this);
                         $line .= "\t\t<{$key}><![CDATA[".$item[$key]."]]></{$key}>\r\n";
                     }
                     $line .= "\t</item>\r\n";
@@ -1181,7 +1240,7 @@ class WP_Admin_UI
             }
             elseif($this->export_type=='json')
             {
-                $export_file = str_replace('-','_',sanitize_title($this->items)).'_'.date('m-d-Y_h-i-sa').'.json';
+                $export_file = str_replace('-','_',sanitize_title($this->items)).'_'.date_i18n('m-d-Y_h-i-sa').'.json';
                 $fp = fopen($this->export_dir.'/'.$export_file,'a+');
                 $data = array('items'=>array('count'=>count($this->full_data),'item'=>array()));
                 foreach($this->full_data as $item)
@@ -1191,8 +1250,9 @@ class WP_Admin_UI
                     {
                         if(false===$attributes['display']&&false===$attributes['export'])
                             continue;
+                        $item[$key] = $this->field_value($item[$key],$key,$attributes);
                         if(false!==$attributes['custom_display']&&function_exists("{$attributes['custom_display']}"))
-                            $item[$key] = $attributes['custom_display']($item[$key],$item,$this);
+                            $item[$key] = $attributes['custom_display']($item[$key],$item,$key,$attributes,$this);
                         $row[$key] = $item[$key];
                     }
                     $data['items']['item'][] = $row;
@@ -1237,76 +1297,180 @@ class WP_Admin_UI
         if(false===$this->sql)
         {
             $sql = "SELECT SQL_CALC_FOUND_ROWS * FROM $this->table";
+            $wheresql = $havingsql = $ordersql = $limitsql = '';
+            $other_sql = $having_sql = array();
+            $selects = array();
+            if(isset($selectmatches[1])&&!empty($selectmatches[1])&&stripos($selectmatches[1],' AS ')!==false)
+            {
+                $theselects = explode(', ',$selectmatches[1]);
+                if(empty($theselects))
+                    $theselects = explode(',',$selectmatches[1]);
+                foreach($theselects as $selected)
+                {
+                    $selectfield = explode(' AS ',$selected);
+                    if(count($selectfield)==2)
+                    {
+                        $field = trim(trim($selectfield[1]),'`');
+                        $real_field = trim(trim($selectfield[0]),'`');
+                        $selects[$field] = $real_field;
+                    }
+                }
+            }
             if(false!==$this->search&&!empty($this->search_columns))
             {
-                $whered = false;
                 if(false!==$this->search_query&&0<strlen($this->search_query))
                 {
-                    $sql .= " WHERE ";
-                    $whered = true;
-                    $other_sql = array();
                     foreach($this->search_columns as $key=>$column)
                     {
-                        if(false===$column['search'])
+                        $attributes = $column;
+                        if(!is_array($attributes))
+                            $attributes = array();
+                        if(false===$attributes['search'])
                             continue;
                         if(in_array($attributes['type'],array('date','time','datetime')))
                             continue;
                         if(is_array($column))
                             $column = $key;
-                        $other_sql[] = "`$column` LIKE '%".$this->sanitize($this->search_query)."%'";
+                        if(!isset($this->filters[$column]))
+                            continue;
+                        $columnfield = '`'.$column.'`';
+                        if(isset($selects[$column]))
+                            $columnfield = '`'.$selects[$column].'`';
+                        if($attributes['real_name']!==false)
+                            $columnfield = $attributes['real_name'];
+                        if($attributes['group_related']!==false)
+                            $having_sql[] = "$columnfield LIKE '%".$this->sanitize($this->search_query)."%'";
+                        else
+                            $other_sql[] = "$columnfield LIKE '%".$this->sanitize($this->search_query)."%'";
                     }
                     if(!empty($other_sql))
-                        $sql .= '('.implode(' OR ',$other_sql).')';
+                    {
+                        $other_sql = array('('.implode(' OR ',$other_sql).')');
+                    }
+                    if(!empty($having_sql))
+                    {
+                        $having_sql = array('('.implode(' OR ',$having_sql).')');
+                    }
                 }
-                $other_sql = array();
                 foreach($this->filters as $filter)
                 {
                     if(!isset($this->search_columns[$filter]))
                         continue;
+                    $filterfield = '`'.$filter.'`';
+                    if(isset($selects[$filter]))
+                        $filterfield = '`'.$selects[$filter].'`';
+                    if($this->search_columns[$filter]['real_name']!==false)
+                        $filterfield = $this->search_columns[$filter]['real_name'];
                     if(in_array($this->search_columns[$filter]['type'],array('date','datetime')))
                     {
-                        $start = date('Y-m-d').' 00:00:00';
-                        $end = date('Y-m-d').' 23:59:59';
-                        if(strlen($this->get_var('filter_'.$filter.'_start',false))<1&&strlen($this->get_var('filter_'.$filter.'_end',false))<1)
+                        $start = date_i18n('Y-m-d').($this->search_columns[$filter]['type']=='datetime'?' 00:00:00':'');
+                        $end = date_i18n('Y-m-d').($this->search_columns[$filter]['type']=='datetime'?' 23:59:59':'');
+                        if(strlen($this->get_var('filter_'.$filter.'_start',$this->search_columns[$filter]['filter_default']))<1&&strlen($this->get_var('filter_'.$filter.'_end',$this->search_columns[$filter]['filter_ongoing_default']))<1)
                             continue;
-                        if(0<strlen($this->get_var('filter_'.$filter.'_start',false)))
-                            $start = date('Y-m-d',strtotime($this->get_var('filter_'.$filter.'_start',false))).' 00:00:00';
-                        if(0<strlen($this->get_var('filter_'.$filter.'_end',false)))
-                            $end = date('Y-m-d',strtotime($this->get_var('filter_'.$filter.'_end',false))).' 23:59:59';
+                        if(0<strlen($this->get_var('filter_'.$filter.'_start',$this->search_columns[$filter]['filter_default'])))
+                            $start = date_i18n('Y-m-d',strtotime($this->get_var('filter_'.$filter.'_start',$this->search_columns[$filter]['filter_default']))).($this->search_columns[$filter]['type']=='datetime'?' 00:00:00':'');
+                        if(0<strlen($this->get_var('filter_'.$filter.'_end',$this->search_columns[$filter]['filter_ongoing_default'])))
+                            $end = date_i18n('Y-m-d',strtotime($this->get_var('filter_'.$filter.'_end',$this->search_columns[$filter]['filter_ongoing_default']))).($this->search_columns[$filter]['type']=='datetime'?' 23:59:59':'');
                         if(false!==$this->search_columns[$filter]['date_ongoing'])
-                            $other_sql[] = "((`$filter` <= '$start' OR `$filter` <= '$end') AND (`".$this->search_columns[$filter]['date_ongoing']."` >= '$end' OR `".$this->search_columns[$filter]['date_ongoing']."` >= '$start'))";
+                        {
+                            $date_ongoing = $this->search_columns[$filter]['date_ongoing'];
+                            if(isset($selects[$date_ongoing]))
+                                $date_ongoing = $selects[$date_ongoing];
+                            if($this->search_columns[$filter]['group_related']!==false)
+                                $having_sql[] = "(($filterfield <= '$start' OR ($filterfield >= '$start' AND $filterfield <= '$end')) AND ($date_ongoing >= '$start' OR ($date_ongoing >= '$start' AND $date_ongoing <= '$end')))";
+                            else
+                                $other_sql[] = "(($filterfield <= '$start' OR ($filterfield >= '$start' AND $filterfield <= '$end')) AND ($date_ongoing >= '$start' OR ($date_ongoing >= '$start' AND $date_ongoing <= '$end')))";
+                        }
                         else
-                            $other_sql[] = "(`$filter` BETWEEN '$start' AND '$end')";
+                        {
+                            if($this->search_columns[$filter]['group_related']!==false)
+                                $having_sql[] = "($filterfield BETWEEN '$start' AND '$end')";
+                            else
+                                $other_sql[] = "($filterfield BETWEEN '$start' AND '$end')";
+                        }
                     }
-                    elseif(0<strlen($this->get_var('filter_'.$filter,false)))
-                        $other_sql[] = "`$filter` LIKE '%".$this->sanitize($this->get_var('filter_'.$filter,false))."%'";
+                    elseif(0<strlen($this->get_var('filter_'.$filter,$this->search_columns[$filter]['filter_default']))&&'related'==$this->search_columns[$filter]['type']&&false!==$this->search_columns[$filter]['related'])
+                    {
+                        if(!is_array($this->search_columns[$filter]['related']))
+                        {
+                            $search_value = $this->sanitize($this->get_var('filter_'.$filter,$this->search_columns[$filter]['filter_default']));
+                            if(intval($search_value)<0)
+                                $search_value = "'".$search_value."'";
+                            else
+                                $search_value = intval($search_value);
+                            if($this->search_columns[$filter]['group_related']!==false)
+                                $having_sql[] = "`".$this->search_columns[$filter]['related']."`.`".$this->search_columns[$filter]['related_id']."` = $search_value";
+                            else
+                                $other_sql[] = "`".$this->search_columns[$filter]['related']."`.`".$this->search_columns[$filter]['related_id']."` = $search_value";
+                        }
+                        else
+                        {
+                            if($this->search_columns[$filter]['group_related']!==false)
+                                $having_sql[] = "$filterfield LIKE '%".$this->sanitize($this->get_var('filter_'.$filter,$this->search_columns[$filter]['filter_default']))."%'";
+                            else
+                                $other_sql[] = "$filterfield LIKE '%".$this->sanitize($this->get_var('filter_'.$filter,$this->search_columns[$filter]['filter_default']))."%'";
+                        }
+                    }
+                    elseif(0<strlen($this->get_var('filter_'.$filter,$this->search_columns[$filter]['filter_default'])))
+                    {
+                        if($this->search_columns[$filter]['group_related']!==false)
+                            $having_sql[] = "$filterfield LIKE '%".$this->sanitize($this->get_var('filter_'.$filter,$this->search_columns[$filter]['filter_default']))."%'";
+                        else
+                            $other_sql[] = "$filterfield LIKE '%".$this->sanitize($this->get_var('filter_'.$filter,$this->search_columns[$filter]['filter_default']))."%'";
+                    }
                 }
                 if(!empty($other_sql))
                 {
-                    if(false===$whered)
-                        $sql .= " WHERE ";
+                    if(false===stripos($sql,' WHERE '))
+                        $wheresql .= ' WHERE ('.implode(' AND ',$other_sql).')';
+                    elseif(empty($wheresql))
+                        $wheresql .= ' AND ('.implode(' AND ',$other_sql).')';
+                    elseif(false===stripos($sql,' WHERE %%WHERE%% '))
+                        $wheresql .= '('.implode(' AND ',$other_sql).') AND ';
+                    elseif(false!==stripos($sql,' %%WHERE%% '))
+                        $wheresql .= ' AND ('.implode(' AND ',$other_sql).')';
                     else
-                        $sql .= " AND ";
-                    $sql .= implode(' AND ',$other_sql);
+                        $wheresql .= '('.implode(' AND ',$other_sql).') AND ';
+                }
+                if(!empty($having_sql))
+                {
+                    if(false===stripos($sql,' HAVING '))
+                        $havingsql .= ' HAVING ('.implode(' AND ',$having_sql).')';
+                    elseif(empty($havingsql))
+                        $havingsql .= ' AND ('.implode(' AND ',$having_sql).')';
+                    elseif(false===stripos($sql,' HAVING %%HAVING%% '))
+                        $havingsql .= '('.implode(' AND ',$having_sql).') AND ';
+                    elseif(false!==stripos($sql,' %%HAVING%% '))
+                        $havingsql .= ' AND ('.implode(' AND ',$having_sql).')';
+                    else
+                        $havingsql .= '('.implode(' AND ',$having_sql).') AND ';
                 }
             }
-            $sql .= ' ORDER BY ';
             if(false!==$this->order&&(false===$this->reorder||$this->action!='reorder'))
-                $sql .= $this->order.' '.$this->order_dir;
+                $ordersql = trim($this->order.' '.$this->order_dir);
             elseif(false!==$this->reorder&&$this->action=='reorder')
-                $sql .= $this->reorder_order.' '.$this->reorder_order_dir;
-            else
-                $sql .= $this->identifier;
-            if(false!==$this->pagination&&!$full)
+                $ordersql = trim($this->reorder_order.' '.$this->reorder_order_dir);
+            elseif(stripos($sql,' ORDER BY ')===false)
+                $ordersql = trim($this->identifier);
+            if(false!==$this->pagination&&!$full&&stripos($sql,' LIMIT ')===false)
             {
                 $start = ($this->page-1)*$this->limit;
                 $end = ($this->page-1)*$this->limit+$this->limit;
-                $sql .= " LIMIT $start,$end";
+                $limitsql .= " LIMIT $start,$end";
             }
+            if(!empty($wheresql))
+                $sql .= ' WHERE '.$wheresql;
+            if(!empty($havingsql))
+                $sql .= ' HAVING '.$havingsql;
+            if(!empty($ordersql))
+                $sql .= ' ORDER BY '.$ordersql;
+            $sql .= $limitsql;
+            $sql = str_replace('``','`',$sql);
+            $sql = str_replace('  ',' ',$sql);
         }
         else
         {
-            $sql = str_replace(array("\n","\r"),' ',' '.$this->sql);
+            $sql = ' '.str_replace(array("\n","\r"),' ',' '.$this->sql).' ';
             $sql = str_ireplace(' SELECT ',' SELECT SQL_CALC_FOUND_ROWS ',str_ireplace(' SELECT SQL_CALC_FOUND_ROWS ',' SELECT ',$sql));
             $wheresql = $havingsql = $ordersql = $limitsql = '';
             $other_sql = $having_sql = array();
@@ -1375,14 +1539,14 @@ class WP_Admin_UI
                         $filterfield = $this->search_columns[$filter]['real_name'];
                     if(in_array($this->search_columns[$filter]['type'],array('date','datetime')))
                     {
-                        $start = date('Y-m-d').($this->search_columns[$filter]['type']=='datetime'?' 00:00:00':'');
-                        $end = date('Y-m-d').($this->search_columns[$filter]['type']=='datetime'?' 23:59:59':'');
-                        if(strlen($this->get_var('filter_'.$filter.'_start',false))<1&&strlen($this->get_var('filter_'.$filter.'_end',false))<1)
+                        $start = date_i18n('Y-m-d').($this->search_columns[$filter]['type']=='datetime'?' 00:00:00':'');
+                        $end = date_i18n('Y-m-d').($this->search_columns[$filter]['type']=='datetime'?' 23:59:59':'');
+                        if(strlen($this->get_var('filter_'.$filter.'_start',$this->search_columns[$filter]['filter_default']))<1&&strlen($this->get_var('filter_'.$filter.'_end',$this->search_columns[$filter]['filter_ongoing_default']))<1)
                             continue;
-                        if(0<strlen($this->get_var('filter_'.$filter.'_start',false)))
-                            $start = date('Y-m-d',strtotime($this->get_var('filter_'.$filter.'_start',false))).($this->search_columns[$filter]['type']=='datetime'?' 00:00:00':'');
-                        if(0<strlen($this->get_var('filter_'.$filter.'_end',false)))
-                            $end = date('Y-m-d',strtotime($this->get_var('filter_'.$filter.'_end',false))).($this->search_columns[$filter]['type']=='datetime'?' 23:59:59':'');
+                        if(0<strlen($this->get_var('filter_'.$filter.'_start',$this->search_columns[$filter]['filter_default'])))
+                            $start = date_i18n('Y-m-d',strtotime($this->get_var('filter_'.$filter.'_start',$this->search_columns[$filter]['filter_default']))).($this->search_columns[$filter]['type']=='datetime'?' 00:00:00':'');
+                        if(0<strlen($this->get_var('filter_'.$filter.'_end',$this->search_columns[$filter]['filter_ongoing_default'])))
+                            $end = date_i18n('Y-m-d',strtotime($this->get_var('filter_'.$filter.'_end',$this->search_columns[$filter]['filter_ongoing_default']))).($this->search_columns[$filter]['type']=='datetime'?' 23:59:59':'');
                         if(false!==$this->search_columns[$filter]['date_ongoing'])
                         {
                             $date_ongoing = $this->search_columns[$filter]['date_ongoing'];
@@ -1401,19 +1565,43 @@ class WP_Admin_UI
                                 $other_sql[] = "($filterfield BETWEEN '$start' AND '$end')";
                         }
                     }
-                    elseif(0<strlen($this->get_var('filter_'.$filter,false)))
+                    elseif(0<strlen($this->get_var('filter_'.$filter,$this->search_columns[$filter]['filter_default']))&&'related'==$this->search_columns[$filter]['type']&&false!==$this->search_columns[$filter]['related'])
+                    {
+                        if(!is_array($this->search_columns[$filter]['related']))
+                        {
+                            $search_value = $this->sanitize($this->get_var('filter_'.$filter,$this->search_columns[$filter]['filter_default']));
+                            if(intval($search_value)<0)
+                                $search_value = "'".$search_value."'";
+                            else
+                                $search_value = intval($search_value);
+                            if($this->search_columns[$filter]['group_related']!==false)
+                                $having_sql[] = "`".$this->search_columns[$filter]['related']."`.`".$this->search_columns[$filter]['related_id']."` = $search_value";
+                            else
+                                $other_sql[] = "`".$this->search_columns[$filter]['related']."`.`".$this->search_columns[$filter]['related_id']."` = $search_value";
+                        }
+                        else
+                        {
+                            if($this->search_columns[$filter]['group_related']!==false)
+                                $having_sql[] = "$filterfield LIKE '%".$this->sanitize($this->get_var('filter_'.$filter,$this->search_columns[$filter]['filter_default']))."%'";
+                            else
+                                $other_sql[] = "$filterfield LIKE '%".$this->sanitize($this->get_var('filter_'.$filter,$this->search_columns[$filter]['filter_default']))."%'";
+                        }
+                    }
+                    elseif(0<strlen($this->get_var('filter_'.$filter,$this->search_columns[$filter]['filter_default'])))
                     {
                         if($this->search_columns[$filter]['group_related']!==false)
-                            $having_sql[] = "$filterfield LIKE '%".$this->sanitize($this->get_var('filter_'.$filter,false))."%'";
+                            $having_sql[] = "$filterfield LIKE '%".$this->sanitize($this->get_var('filter_'.$filter,$this->search_columns[$filter]['filter_default']))."%'";
                         else
-                            $other_sql[] = "$filterfield LIKE '%".$this->sanitize($this->get_var('filter_'.$filter,false))."%'";
+                            $other_sql[] = "$filterfield LIKE '%".$this->sanitize($this->get_var('filter_'.$filter,$this->search_columns[$filter]['filter_default']))."%'";
                     }
                 }
                 if(!empty($other_sql))
                 {
                     if(false===stripos($sql,' WHERE '))
                         $wheresql .= ' WHERE ('.implode(' AND ',$other_sql).')';
-                    elseif(empty($wheresql))
+                    elseif(false===stripos($sql,' WHERE %%WHERE%% '))
+                        $wheresql .= '('.implode(' AND ',$other_sql).') AND ';
+                    elseif(false!==stripos($sql,' %%WHERE%% '))
                         $wheresql .= ' AND ('.implode(' AND ',$other_sql).')';
                     else
                         $wheresql .= '('.implode(' AND ',$other_sql).') AND ';
@@ -1422,7 +1610,9 @@ class WP_Admin_UI
                 {
                     if(false===stripos($sql,' HAVING '))
                         $havingsql .= ' HAVING ('.implode(' AND ',$having_sql).')';
-                    elseif(empty($havingsql))
+                    elseif(false===stripos($sql,' HAVING %%HAVING%% '))
+                        $havingsql .= '('.implode(' AND ',$having_sql).') AND ';
+                    elseif(false!==stripos($sql,' %%HAVING%% '))
                         $havingsql .= ' AND ('.implode(' AND ',$having_sql).')';
                     else
                         $havingsql .= '('.implode(' AND ',$having_sql).') AND ';
@@ -1436,20 +1626,23 @@ class WP_Admin_UI
                 $ordersql = trim($this->identifier);
             if(!empty($ordersql))
             {
-                if(stripos($sql,' ORDER BY ')===false)
+                if(false===stripos($sql,' ORDER BY '))
                     $ordersql = ' ORDER BY '.$ordersql;
+                elseif(false!==stripos($sql,' ORDER BY %%ORDERBY%% '))
+                    $ordersql = $ordersql.', ';
+                elseif(false!==stripos($sql,' %%ORDERBY%% '))
+                    $ordersql = ','.$ordersql;
                 else
                     $ordersql = $ordersql.', ';
             }
-            if(false!==$this->pagination&&!$full&&stripos($sql,' LIMIT ')===false)
+            if(false!==$this->pagination&&!$full)
             {
                 $start = ($this->page-1)*$this->limit;
                 $end = ($this->page-1)*$this->limit+$this->limit;
-                $limitsql .= " LIMIT $start,$end";
+                $limitsql .= $start.','.$end;
             }
-            $sql = str_replace(' WHERE ',' WHERE %%WHERE%% ',$sql);
-            $sql = str_replace(' HAVING ',' HAVING %%HAVING%% ',$sql);
-            $sql = str_replace(' ORDER BY ',' ORDER BY %%ORDERBY%% ',$sql);
+            else
+                $sql = str_replace (' LIMIT %%LIMIT%% ','',$sql);
             if(stripos($sql,'%%WHERE%%')===false&&stripos($sql,' WHERE ')===false)
             {
                 if(stripos($sql,' GROUP BY ')!==false)
@@ -1461,6 +1654,8 @@ class WP_Admin_UI
                 else
                     $sql .= ' %%WHERE%% ';
             }
+            elseif(stripos($sql,'%%WHERE%%')===false)
+                $sql = str_replace(' WHERE ',' WHERE %%WHERE%% ',$sql);
             if(stripos($sql,'%%HAVING%%')===false&&stripos($sql,' HAVING ')===false)
             {
                 if(stripos($sql,' ORDER BY ')!==false)
@@ -1470,6 +1665,8 @@ class WP_Admin_UI
                 else
                     $sql .= ' %%HAVING%% ';
             }
+            elseif(stripos($sql,'%%HAVING%%')===false)
+                $sql = str_replace(' HAVING ',' HAVING %%HAVING%% ',$sql);
             if(stripos($sql,'%%ORDERBY%%')===false&&stripos($sql,' ORDER BY ')===false)
             {
                 if(stripos($sql,' LIMIT ')!==false)
@@ -1477,16 +1674,22 @@ class WP_Admin_UI
                 else
                     $sql .= ' %%ORDERBY%% ';
             }
-            if(stripos($sql,'%%LIMIT%%')===false&&stripos($sql,' LIMIT ')===false)
-                $sql .= ' %%LIMIT%%';
+            elseif(stripos($sql,'%%ORDERBY%%')===false)
+                $sql = str_replace(' ORDER BY ',' ORDER BY %%ORDERBY%% ',$sql);
+            if(stripos($sql,'%%LIMIT%%')===false&&stripos($sql,' LIMIT ')===false&&!empty($limitsql))
+                $sql .= ' LIMIT %%LIMIT%% ';
+            elseif(stripos($sql,'%%LIMIT%%')===false)
+                $sql = str_replace(' LIMIT ',' LIMIT %%LIMIT%% ',$sql);
             $sql = str_replace('%%WHERE%%',$wheresql,$sql);
             $sql = str_replace('%%HAVING%%',$havingsql,$sql);
             $sql = str_replace('%%ORDERBY%%',$ordersql,$sql);
             $sql = str_replace('%%LIMIT%%',$limitsql,$sql);
             $sql = str_replace('``','`',$sql);
             $sql = str_replace('  ',' ',$sql);
-            //echo "<textarea cols='130' rows='30'>$sql</textarea>";
         }
+        //echo "<textarea cols='130' rows='30'>$sql</textarea>";
+        if(false!==$this->default_none&&false===$full&&empty($wheresql)&&empty($havingsql))
+            return;
         $results = $wpdb->get_results($sql,ARRAY_A);
         $results = $this->do_hook('get_data',$results,$full);
         if($full)
@@ -1521,6 +1724,7 @@ class WP_Admin_UI
     }
     function manage ($reorder=0)
     {
+        global $wpdb;
         $this->do_hook('manage',$reorder);
         if(isset($this->custom['manage'])&&function_exists("{$this->custom['manage']}"))
             return $this->custom['manage']($this,$reorder);
@@ -1535,21 +1739,21 @@ class WP_Admin_UI
             $this->get_data();
         if(false!==$this->export&&$this->action=='export')
             $this->export();
-        if((!empty($this->data)||false!==$this->search_query)&&false!==$this->search)
+        if((!empty($this->data)||false!==$this->search_query||false!==$this->default_none)&&false!==$this->search)
         {
 ?>
     <form id="posts-filter" action="" method="get">
         <p class="search-box">
 <?php
-            $hidden_filters = array();
+            $excluded_filters = array();
             foreach($this->filters as $filter)
             {
-                $hidden_filters[] = 'filter_'.$filter.'_start';
-                $hidden_filters[] = 'filter_'.$filter.'_end';
-                $hidden_filters[] = 'filter_'.$filter;
+                $excluded_filters[] = 'filter_'.$filter.'_start';
+                $excluded_filters[] = 'filter_'.$filter.'_end';
+                $excluded_filters[] = 'filter_'.$filter;
             }
-            $search_filters = array_merge($hidden_filters,array('search_query'));
-            $this->hidden_vars($search_filters);
+            $excluded_filters = array_merge($excluded_filters,array('search_query'));
+            $this->hidden_vars($excluded_filters);
             foreach($this->filters as $filter)
             {
                 if(!isset($this->search_columns[$filter]))
@@ -1569,19 +1773,60 @@ jQuery(document).ready(function(){
 <?php
                     }
                     $date_exists = true;
-                    $start = $this->get_var('filter_'.$filter.'_start',false);
-                    $end = $this->get_var('filter_'.$filter.'_end',false);
+                    $start = $this->get_var('filter_'.$filter.'_start',$this->search_columns[$filter]['filter_default']);
+                    $end = $this->get_var('filter_'.$filter.'_end',$this->search_columns[$filter]['filter_ongoing_default']);
 ?>&nbsp;&nbsp;
             <label for="admin_ui_filter_<?php echo $filter; ?>_start"><?php echo $this->search_columns[$filter]['filter_label']; ?>:</label>
-            <input type="text" name="filter_<?php echo $filter; ?>_start" class="admin_ui_filter admin_ui_date" id="admin_ui_filter_<?php echo $filter; ?>_start" value="<?php echo (false!==$start&&0<strlen($start)?date('m/d/Y',strtotime($start)):''); ?>" /> <label for="admin_ui_filter_<?php echo $filter; ?>_end">to</label>
-            <input type="text" name="filter_<?php echo $filter; ?>_end" class="admin_ui_filter admin_ui_date" id="admin_ui_filter_<?php echo $filter; ?>_end" value="<?php echo (false!==$end&&0<strlen($end)?date('m/d/Y',strtotime($end)):''); ?>" />
+            <input type="text" name="filter_<?php echo $filter; ?>_start" class="admin_ui_filter admin_ui_date" id="admin_ui_filter_<?php echo $filter; ?>_start" value="<?php echo (false!==$start&&0<strlen($start)?date_i18n('m/d/Y',strtotime($start)):''); ?>" /> <label for="admin_ui_filter_<?php echo $filter; ?>_end">to</label>
+            <input type="text" name="filter_<?php echo $filter; ?>_end" class="admin_ui_filter admin_ui_date" id="admin_ui_filter_<?php echo $filter; ?>_end" value="<?php echo (false!==$end&&0<strlen($end)?date_i18n('m/d/Y',strtotime($end)):''); ?>" />
 <?php
+                }
+                elseif('related'==$this->search_columns[$filter]['type']&&false!==$this->search_columns[$filter]['related'])
+                {
+                    if(!is_array($this->search_columns[$filter]['related']))
+                    {
+                        $related = $wpdb->get_results('SELECT `'.$this->search_columns[$filter]['related_id'].'`,`'.$this->search_columns[$filter]['related_field'].'` FROM '.$this->search_columns[$filter]['related'].(!empty($this->search_columns[$filter]['related_sql'])?' '.$this->search_columns[$filter]['related_sql']:''));
+?>
+            <label for="admin_ui_filter_<?php echo $filter; ?>"><?php echo $this->search_columns[$filter]['filter_label']; ?>:</label>
+            <select name="filter_<?php echo $filter; ?><?php echo (false!==$this->search_columns[$filter]['related_multiple']?'[]':''); ?>" id="admin_ui_filter_<?php echo $filter; ?>"<?php echo (false!==$this->search_columns[$filter]['related_multiple']?' size="10" style="height:auto;" MULTIPLE':''); ?>>
+                <option value="">-- Show All --</option>
+<?php
+                        $selected = $this->get_var('filter_'.$filter,$this->search_columns[$filter]['filter_default']);
+                        foreach($related as $option)
+                        {
+?>
+                <option value="<?php echo $option->{$this->search_columns[$filter]['related_id']}; ?>"<?php echo ($option->{$this->search_columns[$filter]['related_id']}==$selected?' SELECTED':''); ?>><?php echo $option->{$this->search_columns[$filter]['related_field']}; ?></option>
+<?php
+                        }
+?>
+            </select>
+<?php
+                    }
+                    else
+                    {
+                        $related = $this->search_columns[$filter]['related'];
+?>
+            <label for="admin_ui_filter_<?php echo $filter; ?>"><?php echo $this->search_columns[$filter]['filter_label']; ?>:</label>
+            <select name="filter_<?php echo $filter; ?><?php echo (false!==$this->search_columns[$filter]['related_multiple']?'[]':''); ?>" id="admin_ui_filter_<?php echo $filter; ?>"<?php echo (false!==$this->search_columns[$filter]['related_multiple']?' size="10" style="height:auto;" MULTIPLE':''); ?>>
+                <option value="">-- Show All --</option>
+<?php
+                        $selected = $this->get_var('filter_'.$filter,$this->search_columns[$filter]['filter_default']);
+                        foreach($related as $option_id=>$option)
+                        {
+?>
+                <option value="<?php echo $option_id; ?>"<?php echo ($option->id==$this->get_var('filter_'.$filter,$this->search_columns[$filter]['filter_default'])?' SELECTED':''); ?>><?php echo $option; ?></option>
+<?php
+                        }
+?>
+            </select>
+<?php
+                    }
                 }
                 else
                 {
 ?>
             <label for="admin_ui_filter_<?php echo $filter; ?>"><?php echo $this->search_columns[$filter]['filter_label']; ?>:</label>
-            <input type="text" name="filter_<?php echo $filter; ?>" class="admin_ui_filter" id="admin_ui_filter_<?php echo $filter; ?>" value="<?php echo $this->get_var('filter_'.$filter,''); ?>" />
+            <input type="text" name="filter_<?php echo $filter; ?>" class="admin_ui_filter" id="admin_ui_filter_<?php echo $filter; ?>" value="<?php echo $this->get_var('filter_'.$filter,$this->search_columns[$filter]['filter_default']); ?>" />
 <?php
                 }
             }
@@ -1593,7 +1838,7 @@ jQuery(document).ready(function(){
             if(false!==$this->search_query)
             {
                 $clear_filters = array();
-                foreach($search_filters as $filter)
+                foreach($this->filters as $filter)
                 {
                     $clear_filters['filter_'.$filter.'_start'] = '';
                     $clear_filters['filter_'.$filter.'_end'] = '';
@@ -1669,8 +1914,15 @@ jQuery(document).ready(function(){
         <br class="clear" />
     </div>
     <div class="clear"></div>
-<?php $this->table($reorder); ?>
 <?php
+        if(empty($this->data)&&false!==$this->default_none&&false===$this->search_query)
+        {
+?>
+    <p>Please use the search filter(s) above to display data<?php if($this->export){ ?>, or click on an Export to download a full copy of the data<?php } ?>.</p>
+<?php
+        }
+        else
+            $this->table($reorder);
         if(!empty($this->data))
         {
 ?>
@@ -1732,11 +1984,11 @@ table.widefat.fixed tbody.sortable tr { height:50px; }
             if(false===$name_column)
                 $id = 'title';
             else
-                $id = 'author';
+                $id = '';
             if(false!==$this->get_var('type',false,false,$attributes))
             {
                 if($attributes['type']=='other')
-                    $id = 'author';
+                    $id = '';
                 if($attributes['type']=='date'||$attributes['type']=='datetime'||$attributes['type']=='time')
                     $id = 'date';
             }
@@ -1830,13 +2082,13 @@ table.widefat.fixed tbody.sortable tr { height:50px; }
                     if($this->view&&($reorder==0||false===$this->reorder))
                     {
 ?>
-            <td class="post-title page-title column-title"><strong><a class="row-title" href="<?php echo $this->var_update(array('action'=>'view','id'=>$row[$this->identifier])); ?>" title="View &#8220;<?php echo htmlentities($row[$column],ENT_COMPAT,get_bloginfo('charset')); ?>&#8221;"><?php echo $row[$column]; ?></a></strong>
+            <td class="post-title page-title column-title"><strong><a class="row-title" href="<?php echo $this->var_update(array('action'=>'view','id'=>$row[$this->identifier])); ?>" title="View &#8220;<?php echo htmlentities($row[$column]); ?>&#8221;"><?php echo $row[$column]; ?></a></strong>
 <?php
                     }
                     elseif($this->edit&&($reorder==0||false===$this->reorder))
                     {
 ?>
-            <td class="post-title page-title column-title"><strong><a class="row-title" href="<?php echo $this->var_update(array('action'=>'edit','id'=>$row[$this->identifier])); ?>" title="Edit &#8220;<?php echo htmlentities($row[$column],ENT_COMPAT,get_bloginfo('charset')); ?>&#8221;"><?php echo $row[$column]; ?></a></strong>
+            <td class="post-title page-title column-title"><strong><a class="row-title" href="<?php echo $this->var_update(array('action'=>'edit','id'=>$row[$this->identifier])); ?>" title="Edit &#8220;<?php echo htmlentities($row[$column]); ?>&#8221;"><?php echo $row[$column]; ?></a></strong>
 <?php
                     }
                     else
@@ -1855,7 +2107,7 @@ table.widefat.fixed tbody.sortable tr { height:50px; }
                         if($this->duplicate)
                             $actions['duplicate'] = '<span class="edit"><a href="'.$this->var_update(array('action'=>'duplicate','id'=>$row[$this->identifier])).'" title="Duplicate this item">Duplicate</a></span>';
                         if($this->delete)
-                            $actions['delete'] = '<span class="delete"><a class="submitdelete" title="Delete this item" href="'.$this->var_update(array('action'=>'delete','id'=>$row[$this->identifier])).'" onclick="if(confirm(\'You are about to delete this item \''.htmlentities($row[$column],ENT_COMPAT,get_bloginfo('charset')).'\'\n \'Cancel\' to stop, \'OK\' to delete.\')){return true;}return false;">Delete</a></span>';
+                            $actions['delete'] = '<span class="delete"><a class="submitdelete" title="Delete this item" href="'.$this->var_update(array('action'=>'delete','id'=>$row[$this->identifier])).'" onclick="if(confirm(\'You are about to delete this item \''.htmlentities($row[$column]).'\'\n \'Cancel\' to stop, \'OK\' to delete.\')){return true;}return false;">Delete</a></span>';
                         if(is_array($this->custom))
                         {
                             foreach($this->custom as $custom_action=>$custom_data)
@@ -1897,19 +2149,19 @@ table.widefat.fixed tbody.sortable tr { height:50px; }
                 elseif('date'==$attributes['type'])
                 {
 ?>
-            <td class="date column-date"><abbr title="<?php echo date('Y/m/d',strtotime($row[$column])); ?>"><?php echo date('Y/m/d',strtotime($row[$column])); ?></abbr></td>
+            <td class="date column-date"><abbr title="<?php echo date_i18n('Y/m/d',strtotime($row[$column])); ?>"><?php echo date_i18n('Y/m/d',strtotime($row[$column])); ?></abbr></td>
 <?php
                 }
                 elseif('time'==$attributes['type'])
                 {
 ?>
-            <td class="date column-date"><abbr title="<?php echo date('g:i:s A',strtotime($row[$column])); ?>"><?php echo date('g:i:s A',strtotime($row[$column])); ?></abbr></td>
+            <td class="date column-date"><abbr title="<?php echo date_i18n('g:i:s A',strtotime($row[$column])); ?>"><?php echo date_i18n('g:i:s A',strtotime($row[$column])); ?></abbr></td>
 <?php
                 }
                 elseif('datetime'==$attributes['type'])
                 {
 ?>
-            <td class="date column-date"><abbr title="<?php echo date('Y/m/d g:i:s A',strtotime($row[$column])); ?>"><?php echo date('Y/m/d g:i:s A',strtotime($row[$column])); ?></abbr></td>
+            <td class="date column-date"><abbr title="<?php echo date_i18n('Y/m/d g:i:s A',strtotime($row[$column])); ?>"><?php echo date_i18n('Y/m/d g:i:s A',strtotime($row[$column])); ?></abbr></td>
 <?php
                 }
                 elseif('related'==$attributes['type']&&false!==$attributes['related'])
@@ -1932,13 +2184,25 @@ table.widefat.fixed tbody.sortable tr { height:50px; }
                                 $column_data[$option_id] = $option;
                     }
 ?>
-            <td class="author column-author"><?php echo implode(', ,',$column_data); ?></td>
+            <td class="author column-author"><?php echo implode(', ',$column_data); ?></td>
 <?php
                 }
                 elseif($attributes['type']=='bool')
                 {
 ?>
             <td class="author column-author"><?php echo ($row[$column]==1?'Yes':'No'); ?></td>
+<?php
+                }
+                elseif($attributes['type']=='number')
+                {
+?>
+            <td class="author column-author"><?php echo intval($row[$column]); ?></td>
+<?php
+                }
+                elseif($attributes['type']=='decimal')
+                {
+?>
+            <td class="author column-author"><?php echo number_format($row[$column],2); ?></td>
 <?php
                 }
                 else
@@ -2074,7 +2338,7 @@ jQuery(document).ready(function(){
                 echo ' <a href="'.$this->var_update(array('limit'=>$option),array('order','order_dir','search_query')).'">'.$option.'</a>';
         }
     }
-    function parse_template_string($in,$row=false)
+    function parse_template_string ($in,$row=false)
     {
         if($row!==false)
         {
@@ -2086,7 +2350,7 @@ jQuery(document).ready(function(){
             $this->row = $this->temp_row;
         return $out;
     }
-    function parse_magic_tags($in)
+    function parse_magic_tags ($in)
     {
         $name = $in[2];
         $helper = '';

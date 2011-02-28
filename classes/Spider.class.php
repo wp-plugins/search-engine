@@ -3,8 +3,10 @@ require_once "Simple.HTML.DOM.Parser.php";
 require_once "Index.class.php";
 require_once "API.class.php";
 
-set_time_limit(1200);
-ini_set('memory_limit','64M');
+set_time_limit(6000);
+@ini_set('zlib.output_compression',0);
+@ini_set('output_buffering','off');
+@ini_set('memory_limit','64M');
 ignore_user_abort(true);
 
 global $se_message_counter;
@@ -13,6 +15,7 @@ $se_message_counter = 0;
 class Search_Engine_Spider
 {
     var $init = true;
+    var $silent = false;
 
     var $url = false;
     var $site_id = false;
@@ -52,6 +55,7 @@ class Search_Engine_Spider
     var $cross_scheme = false;
     var $current_scheme = false;
 
+    var $robots_ignore = false;
     var $robotstxt_check = false;
     var $robotstxt_rules = false;
     var $included_uri = false;
@@ -62,7 +66,7 @@ class Search_Engine_Spider
     var $included_words = false;
     var $excluded_words = false;
 
-    var $user_agent = "Mozilla/5.0 (Windows; U; Windows NT 6.1; en-US) AppleWebKit/532.5 (KHTML, like Gecko) Chrome/4.0.249.78 Safari/532.5";
+    var $user_agent = "Mozilla/5.0 (Windows; U; Windows NT 6.1; en-US) AppleWebKit/532.5 (KHTML, like Gecko) Chrome/4.0.249.78 Safari/532.5 Search-Engine-WP-Plugin-Bot/0.5.5";
     var $username = false;
     var $password = false;
 
@@ -70,6 +74,21 @@ class Search_Engine_Spider
     var $api = false;
     var $queue_counter = 0;
 
+    function flush ($seconds=5)
+    {
+        ob_start();
+        ob_end_clean();
+        flush();
+        @ob_end_flush();
+        if($seconds>0)
+            sleep($seconds);
+    }
+    function output ($msg)
+    {
+        if(false===$this->silent)
+            echo $msg;
+        return $msg;
+    }
     function set_site ($site_id)
     {
         if(!isset($this->api)||$this->api===false||!is_object($this->api))
@@ -106,6 +125,8 @@ class Search_Engine_Spider
         $this->max_depth = $template['max_depth'];
         if(empty($this->max_depth))
             $this->max_depth = false;
+        if(1==$template['disable_robots'])
+            $this->robots_ignore = true;
         $this->username = $template['htaccess_username'];
         if(empty($this->username))
             $this->username = false;
@@ -125,6 +146,11 @@ class Search_Engine_Spider
 
     function spider ($url=false,$manual_depth=false)
     {
+        for($i=0;$i<40000;$i++)
+        {
+            $this->output("\t \n"); // extra space for output in browser
+        }
+        $this->flush(4);
         if($url===false)
         {
             $url = $this->url;
@@ -162,7 +188,7 @@ class Search_Engine_Spider
         $this->links[] = $url;
         $this->links_processed[] = $url;
         $check = $this->crunch($url);
-        $this->munch($this->links_queued,$depth);
+        return $this->munch($this->links_queued,$depth);
     }
     function munch ($urls,$depth)
     {
@@ -171,6 +197,7 @@ class Search_Engine_Spider
         if(!isset($this->index)||$this->index===false||!is_object($this->index))
         {
             $this->index = new Search_Engine_Index();
+            $this->index->robots_ignore = $this->robots_ignore;
             if(false!==$this->excluded_words)
                 $this->index->blacklist_words = $this->excluded_words;
         }
@@ -184,7 +211,7 @@ class Search_Engine_Spider
                     $this->api->bump_template(array('id'=>$this->template_id));
                 $this->message('<strong>Final Report</strong><ul><li><strong>Links Found:</strong> '.count($this->links).'</li><li><strong>Links Processed:</strong> '.count($this->links_processed).'</li><li><strong>Links Spidered:</strong> '.count($this->links_spidered).'</li><li><strong>Links Excluded:</strong> '.count($this->links_excluded).'</li><li><strong>Links Redirected:</strong> '.count($this->links_redirected).'</li><li><strong>Links Not Found:</strong> '.count($this->links_notfound).'</li><li><strong>Links With Server Errors:</strong> '.count($this->links_servererror).'</li><li><strong>Links Non-HTML Content Types:</strong> '.count($this->links_other).'</li></ul>');
                 $this->message('<strong>Spidering Completed - Max Depth Reached</strong>');
-                return false;
+                return true;
             }
             $this->brunch($urls,$depth+1);
         }
@@ -195,6 +222,7 @@ class Search_Engine_Spider
         $this->api->delete_queue(array('site'=>$this->site_id,'template'=>$this->template_id));
         $this->message('<strong>Final Report</strong><ul><li><strong>Links Found:</strong> '.count($this->links).'</li><li><strong>Links Processed:</strong> '.count($this->links_processed).'</li><li><strong>Links Spidered:</strong> '.count($this->links_spidered).'</li><li><strong>Links Excluded:</strong> '.count($this->links_excluded).'</li><li><strong>Links Redirected:</strong> '.count($this->links_redirected).'</li><li><strong>Links Not Found:</strong> '.count($this->links_notfound).'</li><li><strong>Links With Server Errors:</strong> '.count($this->links_servererror).'</li><li><strong>Links Non-HTML Content Types:</strong> '.count($this->links_other).'</li></ul>');
         $this->message('<strong>Spidering Completed</strong>');
+        return true;
     }
     function brunch ($urls,$depth)
     {
@@ -204,8 +232,7 @@ class Search_Engine_Spider
         $index = $this->index;
         $this->index = false;
         $this->links_current = $urls;
-        flush();
-        sleep(6); // alleviate the load, output some html on certain servers that don't output as it goes
+        $this->flush(6); // alleviate the load, output some html on certain servers/browsers that don't output as it goes
         $api->update_queue(array('site'=>$this->site_id,'template'=>$this->template_id,'queue'=>json_encode((array)$this)));
         $this->api = $api;
         $this->index = $index;
@@ -236,8 +263,7 @@ class Search_Engine_Spider
             $index = $this->index;
             $this->index = false;
             $this->links_current = array_diff($this->links_current,$this->links_processed);
-            flush();
-            sleep(2); // alleviate the load, output some html on certain servers that don't output as it goes
+            $this->flush(2); // alleviate the load, output some html on certain servers/browsers that don't output as it goes
             $api->update_queue(array('site'=>$this->site_id,'template'=>$this->template_id,'queue'=>json_encode((array)$this)));
             $this->api = $api;
             $this->index = $index;
@@ -248,7 +274,7 @@ class Search_Engine_Spider
         $parsed = @parse_url($url);
         $parsed['path'] = '/'.ltrim($parsed['path'],'/');
         $this->current_parsed = $parsed;
-        if($this->robotstxt_check===false)
+        if(false===$this->robotstxt_check&&false===$this->robots_ignore)
             $this->get_robotstxt($url);
         if($this->url_exclusion($parsed['path'],$url)===false)
         {
@@ -283,8 +309,7 @@ class Search_Engine_Spider
                 unset($this->links_queued[$key]);
             else
             {
-                echo 'BREAKY!';
-                var_dump($key);
+                $this->output('BREAKY! '.$key);
             }
             return false;
         }
@@ -308,7 +333,7 @@ class Search_Engine_Spider
             return false;
         }
         $this->meta = $this->get_meta_data($url);
-        if(strpos($this->meta['robots'],'nofollow')===false)
+        if(false===strpos($this->meta['robots'],'nofollow')||false!==$this->robots_ignore)
         {
             $this->message('Getting all links from page..');
             $links_found = $this->get_all_links($url);
@@ -319,7 +344,7 @@ class Search_Engine_Spider
         {
             $this->message('<strong>URL meta nofollow - No links will be crawled from this URL</strong>');
         }
-        if(strpos($this->meta['robots'],'noindex')===false)
+        if(false===strpos($this->meta['robots'],'noindex')||false!==$this->robots_ignore)
         {
             $this->message('Indexing page..');
             $indexed = $this->index($url);
@@ -341,6 +366,7 @@ class Search_Engine_Spider
         if(!isset($this->index)||$this->index===false||!is_object($this->index))
         {
             $this->index = new Search_Engine_Index();
+            $this->index->robots_ignore = $this->robots_ignore;
             if(false!==$this->excluded_words)
                 $this->index->blacklist_words = $this->excluded_words;
         }
@@ -374,13 +400,14 @@ class Search_Engine_Spider
     function message ($msg)
     {
         global $se_message_counter;
-        echo date('m/d/Y h:i:sa').' - '.$msg."<br />\r\n";
+        $msg = $this->output(date('m/d/Y h:i:sa').' - '.$msg."<br />\r\n");
         if($se_message_counter==11)
         {
             $se_message_counter==0;
-            flush();
+            $this->flush(0); // alleviate the load, output some html on certain servers/browsers that don't output as it goes
         }
         $se_message_counter++;
+        return $msg;
 
     }
     function get_url ($url,$retry=0)
@@ -388,7 +415,7 @@ class Search_Engine_Spider
         $parsed = @parse_url($url);
         // User Agent for Firefox found at: http://whatsmyuseragent.com/, Chrome found in Chrome at about:version
         ini_set('user_agent',$this->user_agent);
-        $options = array('user-agent'=>$this->user_agent);
+        $options = array('user-agent'=>$this->user_agent,'redirection'=>5);
         if($this->username!==false)
         {
             if($this->password===false)
@@ -396,6 +423,14 @@ class Search_Engine_Spider
             $options['headers']['authorization'] = 'Basic '.base64_encode($this->username.':'.$this->password);
         }
         $remote = wp_remote_request($url,$options);
+        if(!is_array($remote))
+        {
+            if(is_wp_error($remote))
+            {
+                return $this->message('<strong style="color:red;">ERROR:</strong> '.$remote->get_error_message());
+            }
+            return $this->message('<strong style="color:red;">ERROR:</strong> Page not available.');
+        }
         if(!isset($remote['body']))
         {
             $ret = $remote = false;
@@ -441,12 +476,14 @@ class Search_Engine_Spider
                 return false;
         }
         $this->current_last_modified = date('Y-m-d H:i:s');
-        if($remote['headers']['date']!=-1)
+        if(isset($remote['headers']['date'])&&$remote['headers']['date']!=-1)
             $this->current_last_modified = date('Y-m-d H:i:s',strtotime($remote['headers']['date']));
         else
             $this->lastmod_exclude++;
-        $this->current_size = $remote['headers']['content-length'];
-        if(isset($remote['headers']['download-content-length'])&&$remote['headers']['download-content-length']!=-1)
+        $this->current_size = strlen($ret);
+        if(isset($remote['headers']['content-length'])&&$remote['headers']['content-length']>0)
+            $this->current_size = $remote['headers']['content-length'];
+        elseif(isset($remote['headers']['download-content-length'])&&$remote['headers']['download-content-length']>0)
             $this->current_size = $remote['headers']['download-content-length'];
         $this->current_md5 = md5($ret);
         $this->current_data = $ret;
@@ -541,7 +578,7 @@ class Search_Engine_Spider
     }
     function get_robotstxt ($url)
     {
-        if($this->robotstxt_check===false)
+        if(false===$this->robotstxt_check&&false===$this->robots_ignore)
         {
             # Modified from the original PHP code by Chirp Internet: www.chirp.com.au
             $parsed = @parse_url($url);
@@ -640,6 +677,11 @@ class Search_Engine_Spider
                     $check['host'] = $this->current_host;
                     $check['path'] = '/'.ltrim($check['path'],'/');
                 }
+                if($this->current_scheme!=$check['scheme']&&false===$this->cross_scheme&&$this->current_host==$check['host'])
+                {
+                    $this->message('Fixing HTTP/HTTPS scheme to match current site: '.$ret[$k]);
+                    $check['scheme'] = $this->current_scheme;
+                }
                 $link = $check['scheme'].'://'.$check['host'].$check['path'].(isset($check['query'])&&!empty($check['query'])?'?'.$check['query']:'');
                 if($check!==false&&isset($check['path']))
                 {
@@ -684,7 +726,10 @@ class Search_Engine_Spider
 
     function get_all_links ($data)
     {
-        $links = get_tag_data($this->current_data,array('a','area','link','iframe','frame'));
+        $filters = false;
+        if(false!==$this->robots_ignore)
+            $filters = array('a'=>array('rel'=>array('searchengine_nofollow','searchengine_noindex')));
+        $links = get_tag_data($this->current_data,array('a','area','link','iframe','frame'),false,$filters);
         $debug = false;
         $ret = array();
         if(!empty($links)) foreach($links as $tag=>$items)
@@ -718,8 +763,11 @@ class Search_Engine_Spider
     }
     function get_meta_data ($data)
     {
-        $meta = get_tag_data($this->current_data,array('meta','title'),true);
-        $headings = get_tag_data($this->current_data,array('h1','h2','h3'));
+        $filters = false;
+        if(false!==$this->robots_ignore)
+            $filters = array('a'=>array('rel'=>array('searchengine_nofollow','searchengine_noindex')));
+        $meta = get_tag_data($this->current_data,array('meta','title'),true,$filters);
+        $headings = get_tag_data($this->current_data,array('h1','h2','h3'),false,$filters);
         $ret = array('title'=>false,'robots'=>false,'description'=>false,'keywords'=>false,'h1'=>false,'h2'=>false,'h3'=>false);
         if(!empty($meta)) foreach($meta as $tag=>$items)
         {
@@ -734,9 +782,40 @@ class Search_Engine_Spider
                     if($tag=='meta')
                     {
                         if(isset($ret[$attributes['name']])&&!empty($attributes['content']))
+                        {
+                            $tag = $attributes['name'];
+                            if(!is_array($ret[$tag]))
+                                $ret[$tag] = array();
                             $ret[$tag][] = $attributes['content'];
+                        }
                     }
                     else
+                    {
+                        if(!is_array($ret[$tag]))
+                            $ret[$tag] = array();
+                        $ret[$tag][] = strip_tags($attributes['html']);
+                    }
+                }
+                else
+                    $ret[$tag][] = $attributes;
+            }
+            $ret[$tag] = array_filter((array)$ret[$tag]);
+            if(!empty($ret[$tag]))
+                $ret[$tag] = trim(implode(' ',$ret[$tag]));
+            else
+                $ret[$tag]= false;
+        }
+        if(!empty($headings)) foreach($headings as $tag=>$items)
+        {
+            if($ret[$tag]===false||!isset($ret[$tag]))
+                $ret[$tag] = array();
+            foreach($items as $attributes)
+            {
+                if(is_array($attributes))
+                {
+                    if(!empty($attributes['content']))
+                        $ret[$tag][] = $attributes['content'];
+                    elseif(!empty($attributes['html']))
                         $ret[$tag][] = strip_tags($attributes['html']);
                 }
                 else
@@ -744,24 +823,7 @@ class Search_Engine_Spider
             }
             $ret[$tag] = array_filter((array)$ret[$tag]);
             if(!empty($ret[$tag]))
-                $ret[$tag] = implode(' ',$ret[$tag]);
-            else
-                $ret[$tag]= false;
-        }
-        if(!empty($headings)) foreach($headings as $tag=>$items)
-        {
-            if($ret[$tag]===false)
-                $ret[$tag] = array();
-            foreach($items as $attributes)
-            {
-                if(is_array($attributes))
-                    $ret[$tag][] = $attributes['content'];
-                else
-                    $ret[$tag][] = $attributes;
-            }
-            $ret[$tag] = array_filter((array)$ret[$tag]);
-            if(!empty($ret[$tag]))
-                $ret[$tag] = implode(' ',$ret[$tag]);
+                $ret[$tag] = trim(implode(' ',$ret[$tag]));
             else
                 $ret[$tag]= false;
         }

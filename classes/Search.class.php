@@ -397,6 +397,7 @@ class Search_Engine_Search
     
     function search_do_excerpt ($content,$limit=300,$encode=true)
     {
+        mb_internal_encoding(get_bloginfo('charset'));
         $terms = explode(' ',html_entity_decode($this->search_string,ENT_COMPAT,get_bloginfo('charset')));
         $terms = array_filter($terms);
         $excerpt_length = $limit;
@@ -448,13 +449,11 @@ class Search_Engine_Search
     }
     function highlight_terms ($excerpt, $terms)
     {
+        mb_internal_encoding(get_bloginfo('charset'));
         $start_emp = "<strong>";
         $end_emp = "</strong>";
-
         $start_emp_token = "*[/";
         $end_emp_token = "\]*";
-        mb_internal_encoding(get_bloginfo('charset'));
-
         foreach ($terms as $term)
         {
             $pos = 0;
