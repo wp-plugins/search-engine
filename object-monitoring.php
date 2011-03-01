@@ -27,8 +27,22 @@ function search_engine_object_post_delete ($post_ID)
     require_once SEARCH_ENGINE_DIR."/classes/API.class.php";
     $api = new Search_Engine_API();
     $api->silent = true;
-    $params = array('url'=>$url);
-    $api->delete_page($params);
+    $default_site = get_option('search_engine_default_site');
+    if(0<$default_site)
+    {
+        $site = $api->get_site(array('id'=>$default_site));
+        if(false!==$site)
+        {
+            $parsed = @parse_url($url);
+            if(false!==$parsed)
+            {
+                $parsed['scheme'] = $site['scheme'];
+                $parsed['host'] = $site['host'];
+                $url = $parsed['scheme'].'://'.$parsed['host'].(!empty($parsed['path'])?$parsed['path']:'/').(!empty($parsed['query'])?'?'.$parsed['query']:'').(!empty($parsed['fragment'])?'#'.$parsed['fragment']:'');
+            }
+        }
+    }
+    $api->delete_page(array('url'=>$url));
 }
 function search_engine_object_post_save ($post_ID)
 {
@@ -55,8 +69,22 @@ function search_engine_object_post_save ($post_ID)
     require_once SEARCH_ENGINE_DIR."/classes/API.class.php";
     $api = new Search_Engine_API();
     $api->silent = true;
-    $params = array('url'=>$url);
-    $api->spider_page($params);
+    $default_site = get_option('search_engine_default_site');
+    if(0<$default_site)
+    {
+        $site = $api->get_site(array('id'=>$default_site));
+        if(false!==$site)
+        {
+            $parsed = @parse_url($url);
+            if(false!==$parsed)
+            {
+                $parsed['scheme'] = $site['scheme'];
+                $parsed['host'] = $site['host'];
+                $url = $parsed['scheme'].'://'.$parsed['host'].(!empty($parsed['path'])?$parsed['path']:'/').(!empty($parsed['query'])?'?'.$parsed['query']:'').(!empty($parsed['fragment'])?'#'.$parsed['fragment']:'');
+            }
+        }
+    }
+    $api->spider_page(array('url'=>$url));
 }
 
 // Pods - WAITING FOR 2.0

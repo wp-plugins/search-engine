@@ -3,7 +3,7 @@
 Plugin Name: Search Engine
 Plugin URI: http://scottkclark.com/wordpress/search-engine/
 Description: THIS IS A BETA VERSION - Currently in development - A search engine for WordPress that indexes ALL of your site and provides comprehensive search.
-Version: 0.5.5
+Version: 0.5.7
 Author: Scott Kingsley Clark
 Author URI: http://scottkclark.com/
 
@@ -24,12 +24,15 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 global $wpdb;
 define('SEARCH_ENGINE_TBL',$wpdb->prefix.'searchengine_');
-define('SEARCH_ENGINE_VERSION','055');
+define('SEARCH_ENGINE_VERSION','057');
 define('SEARCH_ENGINE_URL',WP_PLUGIN_URL.'/search-engine');
 define('SEARCH_ENGINE_DIR',WP_PLUGIN_DIR.'/search-engine');
 define('SEARCH_ENGINE_XML_SITEMAPS_DIR',WP_CONTENT_DIR.'/xml-sitemaps');
 
 include_once "object-monitoring.php";
+
+add_action('admin_init','search_engine_init');
+add_action('admin_menu','search_engine_menu');
 
 function search_engine_init ()
 {
@@ -167,13 +170,19 @@ function search_engine_wizard ()
     $data_index = $wpdb->get_results('SELECT t.id,t.site,s.scheme,s.host,t.directory FROM '.SEARCH_ENGINE_TBL.'templates AS t LEFT JOIN '.SEARCH_ENGINE_TBL.'sites AS s ON s.id=t.site ORDER BY CONCAT(s.scheme,"://",s.host,t.directory)',ARRAY_A);
     $existing = $existing_indexes = array();
     $selected = $selected_index = false;
+    $default_site = get_option('search_engine_default_site');
+    if(0<$default_site)
+        $selected = $default_site;
     if(!empty($data)) foreach($data as $row)
     {
         $existing[$row['id']] = $row['scheme'].'://'.$row['host'];
-        if($existing[$row['id']]==get_bloginfo('wpurl')||strpos($existing[$row['id']],get_bloginfo('wpurl'))!==false)
-            $selected = $row['id'];
-        elseif($row['id']==$obj->row['site']&&$create==0)
-            $selected = $row['id'];
+        if(false===$selected)
+        {
+            if($existing[$row['id']]==get_bloginfo('wpurl')||strpos($existing[$row['id']],get_bloginfo('wpurl'))!==false)
+                $selected = $row['id'];
+            elseif($row['id']==$obj->row['site']&&$create==0)
+                $selected = $row['id'];
+        }
     }
     if(!empty($data_index)) foreach($data_index as $row)
     {
@@ -424,7 +433,7 @@ function search_engine_wizard_run ()
                 $_POST['cross_scheme'] = 0;
             $_POST['directory'] = $parsed['path'];
             require_once SEARCH_ENGINE_DIR.'/wp-admin-ui/Admin.class.php';
-            $columns = array('site'=>array('custom_relate'=>array('table'=>SEARCH_ENGINE_TBL.'sites','what'=>'host')),'indexed'=>array('label'=>'Last Indexed','type'=>'date'),'updated'=>array('label'=>'Last Modified','type'=>'date'),'id'=>array('label'=>'Template ID'));
+            $columns = array('site'=>array('custom_display'=>'search_engine_display_site','custom_relate'=>array('table'=>SEARCH_ENGINE_TBL.'sites','what'=>array('scheme','host'))),'indexed'=>array('label'=>'Last Indexed','type'=>'date'),'updated'=>array('label'=>'Last Modified','type'=>'date'),'id'=>array('label'=>'Template ID'));
             $form_columns = $columns;
             unset($form_columns['id']);
             unset($form_columns['indexed']);
@@ -516,7 +525,7 @@ function search_engine_index_templates ()
         $_POST['site'] = $site_id;
     }
     require_once SEARCH_ENGINE_DIR.'/wp-admin-ui/Admin.class.php';
-    $columns = array('site'=>array('custom_relate'=>array('table'=>SEARCH_ENGINE_TBL.'sites','what'=>'host','is'=>'site')),'indexed'=>array('label'=>'Last Indexed','type'=>'date'),'updated'=>array('label'=>'Last Modified','type'=>'date'),'id'=>array('label'=>'Template ID'));
+    $columns = array('site'=>array('custom_display'=>'search_engine_display_site','custom_relate'=>array('table'=>SEARCH_ENGINE_TBL.'sites','what'=>array('scheme','host'),'is'=>'site')),'indexed'=>array('label'=>'Last Indexed','type'=>'date'),'updated'=>array('label'=>'Last Modified','type'=>'date'),'id'=>array('label'=>'Template ID'));
     $admin = new WP_Admin_UI(array('item'=>'Index Template','items'=>'Index Templates','table'=>SEARCH_ENGINE_TBL.'templates','columns'=>$columns,'icon'=>SEARCH_ENGINE_URL.'/assets/icons/search_32.png','custom'=>array('action_end_view'=>'search_engine_index_run','header'=>'search_engine_index_header','index'=>array('label'=>'Index Again','link'=>'admin.php?page=search-engine&action=run&template_id={@id}'),'reindex'=>array('label'=>'Reindex','link'=>'admin.php?page=search-engine&action=run&template_id={@id}&reindex=1')),'edit'=>false,'save'=>false,'add'=>false));
     $admin->go();
 ?>
@@ -561,13 +570,19 @@ function search_engine_index_form ($obj,$create=0)
     $data_index = $wpdb->get_results('SELECT t.id,t.site,s.scheme,s.host,t.directory FROM '.SEARCH_ENGINE_TBL.'templates AS t LEFT JOIN '.SEARCH_ENGINE_TBL.'sites AS s ON s.id=t.site ORDER BY CONCAT(s.scheme,"://",s.host,t.directory)',ARRAY_A);
     $existing = $existing_indexes = array();
     $selected = $selected_index = false;
+    $default_site = get_option('search_engine_default_site');
+    if(0<$default_site)
+        $selected = $default_site;
     if(!empty($data)) foreach($data as $row)
     {
         $existing[$row['id']] = $row['scheme'].'://'.$row['host'];
-        if($existing[$row['id']]==get_bloginfo('wpurl')&&$create==1)
-            $selected = $row['id'];
-        elseif($row['id']==$obj->row['site']&&$create==0)
-            $selected = $row['id'];
+        if(false===$selected)
+        {
+            if($existing[$row['id']]==get_bloginfo('wpurl')&&$create==1)
+                $selected = $row['id'];
+            elseif($row['id']==$obj->row['site']&&$create==0)
+                $selected = $row['id'];
+        }
     }
     if(!empty($data_index)) foreach($data_index as $row)
     {
@@ -811,8 +826,12 @@ function search_engine_logs ()
 }
 function search_engine_settings ()
 {
+    global $wpdb;
     if(!empty($_POST))
     {
+        delete_option('search_engine_default_site');
+        if(!empty($_POST['default_site']))
+            add_option('search_engine_default_site',$_POST['default_site']);
         if(!empty($_POST['cronjob_token']))
             update_option('search_engine_token',$_POST['cronjob_token']);
         if(!empty($_POST['reset']))
@@ -826,6 +845,35 @@ function search_engine_settings ()
     <form method="post" action="">
         <table class="form-table">
             <tr valign="top">
+                <th scope="row"><label for="default_site">Default Site for Search</label></th>
+                <td>
+                    <select name="default_site" id="default_site">
+                        <option value="0">-- Select One --</option>
+<?php
+    $selected = get_option('search_engine_default_site');
+    if(empty($selected))
+        $selected = false;
+    $data = $wpdb->get_results('SELECT id,host,scheme FROM '.SEARCH_ENGINE_TBL.'sites ORDER BY CONCAT(scheme,"://",host)',ARRAY_A);
+    if(!empty($data)) foreach($data as $row)
+    {
+        $url = $row['scheme'].'://'.$row['host'];
+        if(false===$selected&&$url==get_bloginfo('wpurl'))
+            $selected = $row['id'];
+        elseif($row['id']==$selected)
+            $selected = $row['id'];
+?>
+                        <option value="<?php echo $row['id']; ?>"<?php echo ($selected==$row['id']?' SELECTED':''); ?>><?php echo $url; ?>&nbsp;&nbsp;</option>
+<?php
+    }
+?>
+                    </select><br />
+                    <span class="description">
+                        By default, we use the current site as the default, if you'd like this set to something different, please select the site above.<br />
+                        <em>The default site is also used for Object Monitoring as the Host / Scheme instead of the WP default.</em>
+                    </span>
+                </td>
+            </tr>
+            <tr valign="top">
                 <th scope="row"><label for="cronjob_token">Cronjob Token</label></th>
                 <td>
                     <input name="cronjob_token" type="text" id="cronjob_token" size="50" value="<?php echo get_option('search_engine_token'); ?>" /><br />
@@ -836,7 +884,7 @@ function search_engine_settings ()
             <tr valign="top">
                 <th scope="row"><label for="reset">Reset ALL Data</label></th>
                 <td>
-                    <input name="reset" type="checkbox" id="reset" value="1" />
+                    <input name="reset" type="checkbox" id="reset" value="1" /> - <strong><em>Be sure you want to do this!</em></strong>
                 </td>
             </tr>
         </table>
@@ -979,24 +1027,29 @@ function search_engine_about ()
 </div>
 <?php
 }
-add_action('admin_init','search_engine_init');
-add_action('admin_menu','search_engine_menu');
+function search_engine_display_site ($value,$row)
+{
+    $value = explode(' ',$value);
+    $directory = ltrim($row['directory'],'/');
+    return $value[0].'://'.$value[1].'/'.$directory;
+}
 
 global $search_engine;
 if(!is_admin())
 {
-    add_filter( 'the_posts', 'search_engine_get_posts' );
+    add_filter('the_posts','search_engine_get_posts');
     add_shortcode('search_engine','search_engine_content');
 }
 
-function search_engine_get_posts ( $posts ) {
+function search_engine_get_posts ($posts)
+{
     // Don't do anything for views that aren't search results
-    if ( ! is_search() )
+    if (!is_search())
         return $posts;
 
     // Since we know that this request is for search results, setup loop replacement hooks
-    add_action( 'loop_start', 'search_engine_loop_start' );
-    add_action( 'loop_end', 'search_engine_loop_end' );
+    add_action('loop_start','search_engine_loop_start');
+    add_action('loop_end','search_engine_loop_end');
 
     // Send out the CSS team to clean up everything and make it oh so pretty
     if(!defined('SEARCH_ENGINE_CUSTOM_CSS'))
@@ -1007,22 +1060,23 @@ function search_engine_get_posts ( $posts ) {
 
     // Prevent have_posts from returning false if there aren't any posts
     // This can easily be used to set the number of actual search results
-    $posts = get_posts( array( 'numberposts' => 1, 'post_type' => 'any' ) );
+    $posts = get_posts(array('numberposts'=>1,'post_type'=>'any'));
 
     // If a Search page is found, use it instead (for the added benefit of using a custom template)
     global $wpdb;
-    $search = $wpdb->get_results( "SELECT * from {$wpdb->prefix}posts WHERE post_type = 'page' and post_name = 'search'" );
-    if( !empty( $search ))
-        $posts = array( $search );
+    $search = $wpdb->get_results("SELECT * from {$wpdb->prefix}posts WHERE post_type = 'page' and post_name = 'search'");
+    if(!empty($search))
+        $posts = array($search);
 
     // Create a virtual page if NO posts are found
-    if( empty( $posts ) ) {
+    if(empty($posts))
+    {
         $object = new stdClass();
-        $object->post_title = __( "Search" );
+        $object->post_title = __("Search");
         $object->post_name = "search";
         $object->post_content = "Searching all your nets!";
         $object->post_type = "page";
-        $posts = array( $object );
+        $posts = array($object);
     }
 
     // This is a filter, so return the posts
@@ -1079,8 +1133,14 @@ function search_engine_content ($atts=false)
     global $search_engine;
     include_once SEARCH_ENGINE_DIR.'/classes/API.class.php';
     $api = new Search_Engine_API();
-    $site = parse_url(get_bloginfo('wpurl'));
-    $site = $api->get_site(array('host'=>$site['host'],'scheme'=>'http'));
+    $default_site = get_option('search_engine_default_site');
+    if(0<$default_site)
+        $site = $api->get_site(array('id'=>$default_site));
+    if($site===false)
+    {
+        $site = parse_url(get_bloginfo('wpurl'));
+        $site = $api->get_site(array('host'=>$site['host'],'scheme'=>$site['scheme']));
+    }
     if($site!==false)
     {
         $site_id = $site['id'];

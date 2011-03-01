@@ -301,8 +301,16 @@ class Search_Engine_API
         }
         else
         {
-            $sql = "`host`=%s AND `scheme`=%s";
-            $arr = array($params['host'],$params['scheme']);
+            if(isset($params['force'])&&false!==$params['force'])
+            {
+                $sql = "`host`=%s AND `scheme`=%s";
+                $arr = array($params['host'],$params['scheme']);
+            }
+            else
+            {
+                $sql = "`host`=%s AND (`scheme`=%s OR `scheme`=%s) ORDER BY (`scheme`=%s) DESC";
+                $arr = array($params['host'],$params['scheme'],($params['scheme']=='http'?'https':'http'),$params['scheme']);
+            }
         }
         $row = $wpdb->get_row($wpdb->prepare("SELECT * FROM $this->table_sites WHERE $sql",$arr),ARRAY_A);
         if(!empty($row))

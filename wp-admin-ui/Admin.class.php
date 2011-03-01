@@ -44,7 +44,7 @@ if(isset($_GET['download'])&&!isset($_GET['page'])&&is_user_logged_in())
  *
  * @package Admin UI for Plugins
  *
- * @version 1.7.6
+ * @version 1.7.7
  * @author Scott Kingsley Clark
  * @link http://scottkclark.com/
  *
@@ -2032,14 +2032,13 @@ table.widefat.fixed tbody.sortable tr { height:50px; }
             {
                 if(false===$attributes['display'])
                     continue;
-                if(false!==$attributes['custom_display']&&function_exists("{$attributes['custom_display']}"))
-                    $row[$column] = $attributes['custom_display']($row[$column],$row,$this);
                 if(false!==$attributes['custom_relate'])
                 {
                     global $wpdb;
                     $table = $attributes['custom_relate'];
-                    $on = $this->identifier;
-                    $is = $row[$this->identifier];
+                    $on = $this->sanitize($this->identifier);
+                    $is = $this->sanitize($row[$this->identifier]);
+                    $where = "`$on`='$is'";
                     $what = array('name');
                     if(is_array($table))
                     {
@@ -2058,12 +2057,15 @@ table.widefat.fixed tbody.sortable tr { height:50px; }
                             else
                                 $what[] = $this->sanitize($table['what']);
                         }
+                        $where = "`$on`='$is'";
+                        if(isset($table['where']))
+                            $where = $table['where'];
                         if(isset($table['table']))
                             $table = $table['table'];
                     }
                     $table = $this->sanitize($table);
-                    $wha = implode(',',$what);
-                    $sql = "SELECT $wha FROM $table WHERE `$on`='$is'";
+                    $wha = implode('`,`',$what);
+                    $sql = "SELECT `$wha` FROM $table WHERE $where";
                     $value = @current($wpdb->get_results($sql,ARRAY_A));
                     if(!empty($value))
                     {
@@ -2077,6 +2079,8 @@ table.widefat.fixed tbody.sortable tr { height:50px; }
                             $row[$column] = implode(' ',$val);
                     }
                 }
+                if(false!==$attributes['custom_display']&&function_exists("{$attributes['custom_display']}"))
+                    $row[$column] = $attributes['custom_display']($row[$column],$row,$column,$attributes,$this);
                 if($attributes['id']=='title')
                 {
                     if($this->view&&($reorder==0||false===$this->reorder))

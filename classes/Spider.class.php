@@ -76,6 +76,8 @@ class Search_Engine_Spider
 
     function flush ($seconds=5)
     {
+        if(false!==$this->silent)
+            return;
         ob_start();
         ob_end_clean();
         flush();
@@ -151,17 +153,17 @@ class Search_Engine_Spider
             $this->output("\t \n"); // extra space for output in browser
         }
         $this->flush(4);
-        if($url===false)
+        if(false===$url)
         {
             $url = $this->url;
         }
         $url = (string) $url;
         if(!isset($this->api)||$this->api===false||!is_object($this->api))
             $this->api = new Search_Engine_API();
-        if($this->domain_scope===false)
+        if(false===$this->domain_scope)
         {
             if(ctype_digit($url))
-                $site = $this->api->get_site(array('id'=>$url));
+                $site = $this->api->get_site(array('id'=>$url,'force'=>true));
             else
             {
                 $parsed = @parse_url($url);
@@ -173,7 +175,9 @@ class Search_Engine_Spider
             $this->site_id = $site['id'];
             $this->domain_scope = $site['host'];
             $this->current_host = $site['host'];
+            $this->current_scheme = $site['scheme'];
         }
+        $url = $this->validate_urls($url);
         $this->url = $url;
         $this->message('Spidering URL: '.$url);
         if($manual_depth===false)
@@ -650,9 +654,15 @@ class Search_Engine_Spider
     function validate_urls ($links)
     {
         $ret = array();
+        $single = false;
         if(!empty($links))
         {
             $k = 0;
+            if(!is_array($links))
+            {
+                $links = array($links);
+                $single = true;
+            }
             foreach($links as $link)
             {
                 if(empty($link))
@@ -720,6 +730,10 @@ class Search_Engine_Spider
                 $this->links[] = $link;
                 $k++;
             }
+        }
+        if(false!==$single)
+        {
+            return @current($ret);
         }
         return array_unique($ret);
     }

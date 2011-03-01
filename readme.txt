@@ -4,7 +4,7 @@ Donate link: http://scottkclark.com/
 Tags: search engine, spider, index, search, google, buddypress, full search, wordpress search
 Requires at least: 2.9
 Tested up to: 3.1
-Stable tag: 0.5.5
+Stable tag: 0.5.7
 
 THIS IS A BETA VERSION - Currently in development - A search engine for WordPress that indexes ALL of your site and provides comprehensive search.
 
@@ -38,6 +38,11 @@ Currently, only .htaccess password protected pages are supported, I'm currently 
 * Disallow many links within section(s) of your site by adding the class nofollow to the element tag(s)
 
 == Changelog ==
+
+= 0.5.7 =
+* Added setting (in Search Engine >> Settings) to set default site - This is used for Object Monitoring and the Site Search integration) - Leave blank for current host / scheme to be used, otherwise it'll default to the site of your choice
+* Bug fix for output during Object Monitoring
+* Bug fix for Index Template management screen on 'Site' column - wasn't showing 'scheme' or 'directory'
 
 = 0.5.5 =
 * Added Object Monitoring code, this is basic right now - Just WP Posts / Pages / CPT - Pods support coming when Pods 2.0 is released.
@@ -104,6 +109,11 @@ Currently, only .htaccess password protected pages are supported, I'm currently 
 * First official release to the public as a plugin
 
 == Upgrade Notice ==
+
+= 0.5.7 =
+* Added setting (in Search Engine >> Settings) to set default site - This is used for Object Monitoring and the Site Search integration) - Leave blank for current host / scheme to be used, otherwise it'll default to the site of your choice
+* Bug fix for output during Object Monitoring
+* Bug fix for Index Template management screen on 'Site' column - wasn't showing 'scheme' or 'directory'
 
 = 0.5.5 =
 * Added Object Monitoring code, this is basic right now - Just WP Posts / Pages / CPT - Pods support coming when Pods 2.0 is released.
