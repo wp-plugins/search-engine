@@ -3,7 +3,7 @@
 Plugin Name: Search Engine
 Plugin URI: http://scottkclark.com/wordpress/search-engine/
 Description: THIS IS A BETA VERSION - Currently in development - A search engine for WordPress that indexes ALL of your site and provides comprehensive search.
-Version: 0.5.7
+Version: 0.5.7.1
 Author: Scott Kingsley Clark
 Author URI: http://scottkclark.com/
 
@@ -1129,7 +1129,7 @@ function search_engine_content ($atts=false)
 {
     $time = date('Y-m-d H:i:s');
     $css = 1;
-    $site_id = $site_ids = $template_ids = false;
+    $site_id = $site_ids = $template_ids = $site = false;
     global $search_engine;
     include_once SEARCH_ENGINE_DIR.'/classes/API.class.php';
     $api = new Search_Engine_API();
