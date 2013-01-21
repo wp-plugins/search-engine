@@ -7,6 +7,21 @@ if(!is_object($wpdb))
     require_once('../../../wp-load.php');
     ob_end_clean();
 }
+
+set_time_limit(6000);
+@ini_set('zlib.output_compression',0);
+@ini_set('output_buffering','off');
+@ini_set('memory_limit','64M');
+ignore_user_abort(true);
+
+if ( !headers_sent() ) {
+    status_header(200);
+    nocache_headers();
+    header('Content-Type: text/html; charset=utf-8');
+}
+
+$wpdb->query('SET session wait_timeout = 800');
+
 $check = get_option('search_engine_token');
 if(!isset($_GET['token'])||$_GET['token']!=$check)
     die('Invalid Token');
@@ -17,6 +32,12 @@ require_once "classes/Search.class.php";
 require_once "classes/Sitemap.class.php";
 require_once "classes/API.class.php";
 
+?>
+<!--
+abcdefghijklmnopqrstuvwxyz1234567890aabbccddeeffgghhiijjkkllmmnnooppqqrrssttuuvvwwxxyyzz11223344556677889900abacbcbdcdcededfefegfgfhghgihihjijikjkjlklkmlmlnmnmononpopoqpqprqrqsrsrtstsubcbcdcdedefefgfabcadefbghicjkldmnoepqrfstugvwxhyz1i234j567k890laabmbccnddeoeffpgghqhiirjjksklltmmnunoovppqwqrrxsstytuuzvvw0wxx1yyz2z113223434455666777889890091abc2def3ghi4jkl5mno6pqr7stu8vwx9yz11aab2bcc3dd4ee5ff6gg7hh8ii9j0jk1kl2lmm3nnoo4p5pq6qrr7ss8tt9uuvv0wwx1x2yyzz13aba4cbcb5dcdc6dedfef8egf9gfh0ghg1ihi2hji3jik4jkj5lkl6kml7mln8mnm9ono
+abcdefghijklmnopqrstuvwxyz1234567890aabbccddeeffgghhiijjkkllmmnnooppqqrrssttuuvvwwxxyyzz11223344556677889900abacbcbdcdcededfefegfgfhghgihihjijikjkjlklkmlmlnmnmononpopoqpqprqrqsrsrtstsubcbcdcdedefefgfabcadefbghicjkldmnoepqrfstugvwxhyz1i234j567k890laabmbccnddeoeffpgghqhiirjjksklltmmnunoovppqwqrrxsstytuuzvvw0wxx1yyz2z113223434455666777889890091abc2def3ghi4jkl5mno6pqr7stu8vwx9yz11aab2bcc3dd4ee5ff6gg7hh8ii9j0jk1kl2lmm3nnoo4p5pq6qrr7ss8tt9uuvv0wwx1x2yyzz13aba4cbcb5dcdc6dedfef8egf9gfh0ghg1ihi2hji3jik4jkj5lkl6kml7mln8mnm9ono
+-->
+<?php
 $spider = new Search_Engine_Spider();
 if(isset($_GET['template_id'])&&0<$_GET['template_id'])
 {
@@ -51,6 +72,4 @@ if($spider->site_id!==false)
     }
 }
 else
-{
-    die('Error, please contact plugin developer at http://scottkclark.com/');
-}
+    wp_die('<strong>Error:</strong> Please contact plugin developer at http://scottkclark.com/');

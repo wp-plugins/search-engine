@@ -80,7 +80,9 @@ class Search_Engine_Index
             $this->keyword_counts = $this->get_keyword_counts($keywords);
         }
         $this->keyword_weights = array();
-        $meta_url = $this->get_keyword_counts($this->get_keywords(str_replace('http://','',$meta['url'])),true);
+        $meta_url = array();
+        if (isset($meta['url']))
+            $meta_url = $this->get_keyword_counts($this->get_keywords(str_replace('http://','',$meta['url'])),true);
         $meta_title = $meta_description = $meta_keywords = $meta_h1 = $meta_h2 = array();
         if(isset($meta['title'])&&!empty($meta['title']))
             $meta_title = $this->get_keyword_counts($this->get_keywords($meta['title']),true);
@@ -98,6 +100,7 @@ class Search_Engine_Index
         $parsed = count($parsed);
         foreach($this->keyword_counts as $keyword => $count)
         {
+            $keyword = trim($keyword, "'");
             $score = $count * 5;
             if($parsed==0)
                 $score += 10;
@@ -158,7 +161,7 @@ class Search_Engine_Index
     function get_keywords ($content)
     {
         $content = preg_replace("[^A-Za-z_\'-]", " ", $content);
-        $content = preg_replace( '/&.{0,}?;/', '', $content ); // remove entities
+        $content = preg_replace('/&.{0,}?;/', '', $content); // remove entities
         $content = str_replace(array('-',' _ ',' \' '),' ',' '.$content.' ');
         $content = str_ireplace($this->common_words,' ',' '.$content.' ');
         $keywords = explode(' ',$content);

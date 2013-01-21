@@ -76,6 +76,12 @@ class Search_Engine_Spider
 
     function flush ($seconds=5)
     {
+?>
+<!--
+abcdefghijklmnopqrstuvwxyz1234567890aabbccddeeffgghhiijjkkllmmnnooppqqrrssttuuvvwwxxyyzz11223344556677889900abacbcbdcdcededfefegfgfhghgihihjijikjkjlklkmlmlnmnmononpopoqpqprqrqsrsrtstsubcbcdcdedefefgfabcadefbghicjkldmnoepqrfstugvwxhyz1i234j567k890laabmbccnddeoeffpgghqhiirjjksklltmmnunoovppqwqrrxsstytuuzvvw0wxx1yyz2z113223434455666777889890091abc2def3ghi4jkl5mno6pqr7stu8vwx9yz11aab2bcc3dd4ee5ff6gg7hh8ii9j0jk1kl2lmm3nnoo4p5pq6qrr7ss8tt9uuvv0wwx1x2yyzz13aba4cbcb5dcdc6dedfef8egf9gfh0ghg1ihi2hji3jik4jkj5lkl6kml7mln8mnm9ono
+abcdefghijklmnopqrstuvwxyz1234567890aabbccddeeffgghhiijjkkllmmnnooppqqrrssttuuvvwwxxyyzz11223344556677889900abacbcbdcdcededfefegfgfhghgihihjijikjkjlklkmlmlnmnmononpopoqpqprqrqsrsrtstsubcbcdcdedefefgfabcadefbghicjkldmnoepqrfstugvwxhyz1i234j567k890laabmbccnddeoeffpgghqhiirjjksklltmmnunoovppqwqrrxsstytuuzvvw0wxx1yyz2z113223434455666777889890091abc2def3ghi4jkl5mno6pqr7stu8vwx9yz11aab2bcc3dd4ee5ff6gg7hh8ii9j0jk1kl2lmm3nnoo4p5pq6qrr7ss8tt9uuvv0wwx1x2yyzz13aba4cbcb5dcdc6dedfef8egf9gfh0ghg1ihi2hji3jik4jkj5lkl6kml7mln8mnm9ono
+-->
+<?php
         if(false!==$this->silent)
             return;
         ob_start();
@@ -280,7 +286,12 @@ class Search_Engine_Spider
         $this->current_parsed = $parsed;
         if(false===$this->robotstxt_check&&false===$this->robots_ignore)
             $this->get_robotstxt($url);
-        if($this->url_exclusion($parsed['path'],$url)===false)
+        $exclusion_path = $parsed[ 'path' ];
+        if ( isset( $parsed[ 'query' ] ) )
+            $exclusion_path .= '?' . $parsed[ 'query' ];
+        if ( isset( $parsed[ 'fragment' ] ) )
+            $exclusion_path .= '#' . $parsed[ 'fragment' ];
+        if($this->url_exclusion( $exclusion_path, $url )===false)
         {
             $key = array_search($url,$this->links_queued);
             if($key!==false)
@@ -337,7 +348,15 @@ class Search_Engine_Spider
             return false;
         }
         $this->meta = $this->get_meta_data($url);
-        if(false===strpos($this->meta['robots'],'nofollow')||false!==$this->robots_ignore)
+        if (false !== $this->meta['canonical']) {
+            $key = array_search( $url, $this->links_queued );
+            if ( $key !== false )
+                unset( $this->links_queued[ $key ] );
+
+            $url = $this->meta['canonical'];
+            $this->message( 'Canonical URL found: ' . $url );
+        }
+        if( (false === strpos( $this->meta[ 'robots' ], 'nofollow' )&&false===strpos($this->meta['X-Search-Engine-WP-Plugin'],'nofollow'))||false!==$this->robots_ignore)
         {
             $this->message('Getting all links from page..');
             $links_found = $this->get_all_links($url);
@@ -348,11 +367,11 @@ class Search_Engine_Spider
         {
             $this->message('<strong>URL meta nofollow - No links will be crawled from this URL</strong>');
         }
-        if(false===strpos($this->meta['robots'],'noindex')||false!==$this->robots_ignore)
+        if( (false === strpos( $this->meta[ 'robots' ], 'noindex' )&&false===strpos($this->meta['X-Search-Engine-WP-Plugin'],'noindex'))||false!==$this->robots_ignore)
         {
             $this->message('Indexing page..');
             $indexed = $this->index($url);
-            if($index!==false)
+            if($indexed!==false)
                 $this->links_spidered[] = $url;
         }
         else
@@ -407,8 +426,8 @@ class Search_Engine_Spider
         $msg = $this->output(date('m/d/Y h:i:sa').' - '.$msg."<br />\r\n");
         if($se_message_counter==11)
         {
-            $se_message_counter==0;
-            $this->flush(0); // alleviate the load, output some html on certain servers/browsers that don't output as it goes
+            $se_message_counter = 0;
+            $this->flush(1); // alleviate the load, output some html on certain servers/browsers that don't output as it goes
         }
         $se_message_counter++;
         return $msg;
@@ -419,7 +438,7 @@ class Search_Engine_Spider
         $parsed = @parse_url($url);
         // User Agent for Firefox found at: http://whatsmyuseragent.com/, Chrome found in Chrome at about:version
         ini_set('user_agent',$this->user_agent);
-        $options = array('user-agent'=>$this->user_agent,'redirection'=>5);
+        $options = array('user-agent'=>$this->user_agent,'redirection'=>5,'headers'=>array('user-agent' => $this->user_agent));
         if($this->username!==false)
         {
             if($this->password===false)
@@ -678,7 +697,7 @@ class Search_Engine_Spider
                     if($key!==false)
                         unset($this->links_queued[$key]);
                     $this->message('<strong>Skipping URL</strong>: '.$link);
-                    $this->message('<strong>Status Update</strong><ul><li><strong>Links To Be Crunched:</strong> '.count($urls).'</li><li><strong>Links Queued:</strong> '.count($this->links_queued).'</li><li><strong>Links Processed:</strong> '.count($this->links_processed).'</li><li><strong>Links Spidered:</strong> '.count($this->links_spidered).'</li><li><strong>Links Excluded:</strong> '.count($this->links_excluded).'</li><li><strong>Links Redirected:</strong> '.count($this->links_redirected).'</li><li><strong>Links Not Found:</strong> '.count($this->links_notfound).'</li><li><strong>Links With Server Errors:</strong> '.count($this->links_servererror).'</li><li><strong>Links Non-HTML Content Types:</strong> '.count($this->links_other).'</li></ul>');
+                    $this->message('<strong>Status Update</strong><ul><li><strong>Links To Be Crunched:</strong> '.count($links).'</li><li><strong>Links Queued:</strong> '.count($this->links_queued).'</li><li><strong>Links Processed:</strong> '.count($this->links_processed).'</li><li><strong>Links Spidered:</strong> '.count($this->links_spidered).'</li><li><strong>Links Excluded:</strong> '.count($this->links_excluded).'</li><li><strong>Links Redirected:</strong> '.count($this->links_redirected).'</li><li><strong>Links Not Found:</strong> '.count($this->links_notfound).'</li><li><strong>Links With Server Errors:</strong> '.count($this->links_servererror).'</li><li><strong>Links Non-HTML Content Types:</strong> '.count($this->links_other).'</li></ul>');
                     continue;
                 }
                 if(!isset($check['host'])||empty($check['host']))
@@ -740,9 +759,48 @@ class Search_Engine_Spider
 
     function get_all_links ($data)
     {
-        $filters = false;
-        if(false!==$this->robots_ignore)
-            $filters = array('a'=>array('rel'=>array('searchengine_nofollow','searchengine_noindex')));
+        $filters = array(
+            'a' => array(
+                'rel' => array(
+                    'nofollow',
+                    'noindex',
+                    'searchengine_nofollow',
+                    'searchengine_noindex'
+                )
+            ),
+            'link' => array(
+                'rel' => array(
+                    'shortcut icon',
+                    'stylesheet',
+                    'pingback',
+                    'alternate',
+                    'EditURI',
+                    'wlwmanifest',
+                    'shortlink'
+                )
+            )
+        );
+        if(false!==$this->robots_ignore) {
+            $filters = array(
+                'a' => array(
+                    'rel' => array(
+                        'searchengine_nofollow',
+                        'searchengine_noindex'
+                    )
+                ),
+                'link' => array(
+                    'rel' => array(
+                        'shortcut icon',
+                        'stylesheet',
+                        'pingback',
+                        'alternate',
+                        'EditURI',
+                        'wlwmanifest',
+                        'shortlink'
+                    )
+                )
+            );
+        }
         $links = get_tag_data($this->current_data,array('a','area','link','iframe','frame'),false,$filters);
         $debug = false;
         $ret = array();
@@ -777,17 +835,57 @@ class Search_Engine_Spider
     }
     function get_meta_data ($data)
     {
-        $filters = false;
-        if(false!==$this->robots_ignore)
-            $filters = array('a'=>array('rel'=>array('searchengine_nofollow','searchengine_noindex')));
-        $meta = get_tag_data($this->current_data,array('meta','title'),true,$filters);
+        $filters = array(
+            'a' => array(
+                'rel' => array(
+                    'nofollow',
+                    'noindex',
+                    'searchengine_nofollow',
+                    'searchengine_noindex'
+                )
+            ),
+            'link' => array(
+                'rel' => array(
+                    'shortcut icon',
+                    'stylesheet',
+                    'pingback',
+                    'alternate',
+                    'EditURI',
+                    'wlwmanifest',
+                    'shortlink'
+                )
+            )
+        );
+        if(false!==$this->robots_ignore) {
+            $filters = array(
+                'a' => array(
+                    'rel' => array(
+                        'searchengine_nofollow',
+                        'searchengine_noindex'
+                    )
+                ),
+                'link' => array(
+                    'rel' => array(
+                        'shortcut icon',
+                        'stylesheet',
+                        'pingback',
+                        'alternate',
+                        'EditURI',
+                        'wlwmanifest',
+                        'shortlink'
+                    )
+                )
+            );
+        }
+        $meta = get_tag_data($this->current_data,array('meta','title','link'),true,$filters);
         $headings = get_tag_data($this->current_data,array('h1','h2','h3'),false,$filters);
-        $ret = array('title'=>false,'robots'=>false,'description'=>false,'keywords'=>false,'h1'=>false,'h2'=>false,'h3'=>false);
+        $ret = array('title'=>false,'robots'=>false,'X-Search-Engine-WP-Plugin'=>false,'canonical'=>false,'description'=>false,'keywords'=>false,'h1'=>false,'h2'=>false,'h3'=>false);
         if(!empty($meta)) foreach($meta as $tag=>$items)
         {
+            $tag = strtolower(trim($tag));
             if(empty($tag))
                 continue;
-            if($ret[$tag]===false)
+            if(!isset($ret[$tag])||$ret[$tag]===false)
                 $ret[$tag] = array();
             foreach($items as $attributes)
             {
@@ -795,12 +893,26 @@ class Search_Engine_Spider
                 {
                     if($tag=='meta')
                     {
-                        if(isset($ret[$attributes['name']])&&!empty($attributes['content']))
+                        if( isset( $attributes[ 'name' ] ) &&isset($ret[$attributes['name']])&&!empty($attributes['content']))
                         {
                             $tag = $attributes['name'];
                             if(!is_array($ret[$tag]))
                                 $ret[$tag] = array();
                             $ret[$tag][] = $attributes['content'];
+                        }
+                        elseif ( isset( $attributes[ 'http-equiv' ] ) && isset( $ret[ $attributes[ 'http-equiv' ] ] ) && !empty( $attributes[ 'content' ] ) ) {
+                            $tag = $attributes[ 'http-equiv' ];
+                            if ( !is_array( $ret[ $tag ] ) )
+                                $ret[ $tag ] = array();
+                            $ret[ $tag ][ ] = $attributes[ 'content' ];
+                    }
+                    }
+                    elseif ( $tag == 'link' ) {
+                        if ( isset( $attributes[ 'rel' ] ) && isset( $ret[ $attributes[ 'rel' ] ] ) && !empty( $attributes[ 'href' ] ) ) {
+                            $tag = $attributes[ 'rel' ];
+                            if ( !is_array( $ret[ $tag ] ) )
+                                $ret[ $tag ] = array();
+                            $ret[ $tag ][ ] = $attributes[ 'href' ];
                         }
                     }
                     else
@@ -821,7 +933,7 @@ class Search_Engine_Spider
         }
         if(!empty($headings)) foreach($headings as $tag=>$items)
         {
-            if($ret[$tag]===false||!isset($ret[$tag]))
+            if(!isset($ret[$tag])||$ret[$tag]===false)
                 $ret[$tag] = array();
             foreach($items as $attributes)
             {

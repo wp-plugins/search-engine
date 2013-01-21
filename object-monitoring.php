@@ -7,17 +7,17 @@ add_action('trash_post','search_engine_object_post_delete');
 add_action('save_post','search_engine_object_post_save');
 add_action('untrash_post','search_engine_object_post_save');
 
-function search_engine_object_post_delete ($post_ID)
+function search_engine_object_post_delete ($_post_ID)
 {
-    if(empty($post_ID))
+    if(empty($_post_ID))
         return;
-    $post = get_post($post_ID);
+    $post = get_post($_post_ID);
     if($post->post_status=='auto-draft'||$post->post_type=='revision')
     {
         return;
     }
     global $wpdb;
-    $url = get_permalink($post_ID);
+    $url = get_permalink($_post_ID);
     $siteurl = get_option('siteurl');
     $check = @parse_url($siteurl);
     if($check['scheme']=='http')
@@ -44,14 +44,14 @@ function search_engine_object_post_delete ($post_ID)
     }
     $api->delete_page(array('url'=>$url));
 }
-function search_engine_object_post_save ($post_ID)
+function search_engine_object_post_save ($_post_ID)
 {
-    if(empty($post_ID))
+    if(empty($_post_ID))
         return;
-    $post = get_post($post_ID);
+    $post = get_post($_post_ID);
     if($post->post_status=='draft'||$post->post_status=='pending')
     {
-        search_engine_object_post_delete($post_ID);
+        search_engine_object_post_delete($_post_ID);
         return;
     }
     elseif($post->post_status=='auto-draft'||$post->post_type=='revision')
@@ -59,7 +59,7 @@ function search_engine_object_post_save ($post_ID)
         return;
     }
     global $wpdb;
-    $url = get_permalink($post_ID);
+    $url = get_permalink($_post_ID);
     $siteurl = get_option('siteurl');
     $check = @parse_url($siteurl);
     if($check['scheme']=='http')

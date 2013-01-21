@@ -116,7 +116,7 @@ class Search_Engine_API
         {
             $wpdb->query($wpdb->prepare("UPDATE $this->table_links SET `title`=%s,`description`=%s,`fulltxt`=%s,`lastmod`=%s,`updated`=FROM_UNIXTIME(UNIX_TIMESTAMP()),`size`=%d,`md5_checksum`=%s,`level`=%d WHERE id=$page_id",
                     array($params['title'], $params['description'], $params['fulltxt'], $params['lastmod'], $params['size'], $params['md5_checksum'], $params['level'])));
-            $wpdb->query($wpdb->prepare("DELETE FROM $this->table_index WHERE `link`=%d AND `keyword`=%d AND `site`=%d",array($page_id, $keyword_id, $params['site'])));
+            $wpdb->query($wpdb->prepare("DELETE FROM $this->table_index WHERE `link`=%d AND `site`=%d",array($page_id, $params['site'])));
             foreach($params['keywords'] as $keyword_id=>$weight)
             {
                 $wpdb->query($wpdb->prepare("INSERT INTO $this->table_index (`link`,`keyword`,`weight`,`site`) VALUES ( %d, %d, %d, %d )",array($page_id, $keyword_id, $weight, $params['site'])));
@@ -249,8 +249,8 @@ class Search_Engine_API
         global $wpdb;
         if(is_numeric($params['id']))
         {
-            $wpdb->query($wpdb->prepare("UPDATE $this->table_templates SET `group`=%d,`protocol`=%s,`updated`=FROM_UNIXTIME(UNIX_TIMESTAMP()) WHERE id=$site_id",
-                    array($params['group'], $params['protocol'])));
+            $wpdb->query($wpdb->prepare("UPDATE $this->table_templates SET `group`=%d,`protocol`=%s,`updated`=FROM_UNIXTIME(UNIX_TIMESTAMP()) WHERE id=%d",
+                    array($params['group'], $params['protocol'], $params[ 'id' ])));
             return true;
         }
         else

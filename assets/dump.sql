@@ -38,6 +38,7 @@ CREATE TABLE `wp_searchengine_links` (
   `url` varchar(255) NOT NULL,
   `title` varchar(255) NOT NULL,
   `description` varchar(255) NOT NULL,
+  `thumbnail` varchar(255) NOT NULL,
   `fulltxt` longtext NOT NULL,
   `lastmod` datetime NOT NULL,
   `indexed` datetime NOT NULL,

@@ -13,24 +13,29 @@ class Search_Engine_Search
 
     var $results_per_page = 5;
     var $page = 1;
+    var $query = '';
 
     function __construct($site_ids=false,$template_ids=false)
     {
         global $wpdb;
         $this->query_string = 'SELECT
                                 SQL_CALC_FOUND_ROWS
-                                '.SEARCH_ENGINE_TBL.'links.*,
-                                '.SEARCH_ENGINE_TBL.'keywords.name,
-                                '.SEARCH_ENGINE_TBL.'index.weight
+                                `se_links`.*,
+                                `se_keywords`.name,
+                                `se_index`.weight
                              FROM
-                                '.SEARCH_ENGINE_TBL.'links,'.SEARCH_ENGINE_TBL.'keywords,'.SEARCH_ENGINE_TBL.'index WHERE ';
+                                `'.SEARCH_ENGINE_TBL.'links` AS `se_links`
+                                LEFT JOIN `' . SEARCH_ENGINE_TBL . 'templates` AS `se_templates` ON `se_templates`.`site` = `se_links`.`site`
+                                LEFT JOIN `' . SEARCH_ENGINE_TBL . 'index` AS `se_index` ON `se_index`.`link` = `se_links`.`id`
+                                LEFT JOIN `' . SEARCH_ENGINE_TBL . 'keywords` AS `se_keywords` ON `se_keywords`.`id` = `se_index`.`keyword`
+                            WHERE ';
         if(!empty($site_ids)&&is_array($site_ids))
         {
             $this->site_ids = $site_ids;
             $sql = array();
             foreach($site_ids as $site_id)
             {
-                $sql[] = $wpdb->prepare(SEARCH_ENGINE_TBL.'links.site=%d',array($site_id));
+                $sql[] = $wpdb->prepare('se_links.site=%d',array($site_id));
             }
             $sql = '('.implode(' OR ',$sql).')';
             $this->site_string = $sql;
@@ -42,7 +47,7 @@ class Search_Engine_Search
             $sql = array();
             foreach($template_ids as $template_id)
             {
-                $sql[] = $wpdb->prepare('('.SEARCH_ENGINE_TBL.'links.site='.SEARCH_ENGINE_TBL.'templates.site AND '.SEARCH_ENGINE_TBL.'templates.id=%d)',array($template_id));
+                $sql[] = $wpdb->prepare('(se_links.site=se_templates.site AND se_templates.id=%d)',array($template_id));
             }
             $sql = '('.implode(' OR ',$sql).')';
             $this->site_string = $sql;
@@ -59,11 +64,12 @@ class Search_Engine_Search
 
     function search_exact_query($query)
     {
-        $query_string = preg_match_all("/'([^']+)'/", $this->search_string, $matches, PREG_SET_ORDER);
+        preg_match_all("/'([^']+)'/", $this->search_string, $matches, PREG_SET_ORDER);
         $i = 0;
+        $sql = '';
         foreach($matches as $match)
         {
-            $sql .= ' '.SEARCH_ENGINE_TBL.'keywords.name LIKE "%s"';
+            $sql .= ' se_keywords.name LIKE "%s"';
             if($i < (count($matches) - 1))
             {
                 $sql .= ' AND';
@@ -87,10 +93,11 @@ class Search_Engine_Search
         //var_dump($this->type);
         $i = 0;
 
+        $sql = '';
         foreach($str as $param)
         {
             $param = trim($param);
-            $sql .= ' '.SEARCH_ENGINE_TBL.'keywords.name LIKE %s';
+            $sql .= ' se_keywords.name LIKE %s';
             if($i < (count($str) - 1))
             {
                 $sql .= ' AND';
@@ -109,23 +116,27 @@ class Search_Engine_Search
         $i = 0;
         $sql = 'SELECT
                                 SQL_CALC_FOUND_ROWS
-                    '.SEARCH_ENGINE_TBL.'links.*,
-                    '.SEARCH_ENGINE_TBL.'index.weight
+                    `se_links`.*,
+                    `se_index`.weight
                 FROM
-                    '.SEARCH_ENGINE_TBL.'index
+                    '.SEARCH_ENGINE_TBL.'index AS `se_index`
                 LEFT JOIN
-                    '.SEARCH_ENGINE_TBL.'links
+                    '.SEARCH_ENGINE_TBL.'links AS `se_links`
                 ON
-                    '.SEARCH_ENGINE_TBL.'index.link = '.SEARCH_ENGINE_TBL.'links.id
+                    `se_index`.link = `se_links`.id
                 LEFT JOIN
-                    '.SEARCH_ENGINE_TBL.'keywords
+                    '.SEARCH_ENGINE_TBL.'keywords AS `se_keywords`
                 ON
-                    '.SEARCH_ENGINE_TBL.'index.keyword = '.SEARCH_ENGINE_TBL.'keywords.id
+                    `se_index`.keyword = `se_keywords`.id
+                LEFT JOIN
+                    `' . SEARCH_ENGINE_TBL . 'templates` AS `se_templates`
+                ON
+                    `se_templates`.`site` = `se_links`.`site`
                 WHERE (';
         foreach($str as $param)
         {
             $param = trim($param);
-            $sql .= ' '.SEARCH_ENGINE_TBL.'keywords.name LIKE %s';
+            $sql .= ' `se_keywords`.name LIKE %s';
             if($i < (count($str) - 1))
             {
                 $sql .= ' OR';
@@ -139,8 +150,9 @@ class Search_Engine_Search
     }
     function search_negation_query($query)
     {
-        $negation = preg_match_all('/-[A-Za-z0-9]{1,}|-[A-Za-z0-9]{1.}[[:space:]]/', $query, $matches);
+        preg_match_all('/-[A-Za-z0-9]{1,}|-[A-Za-z0-9]{1.}[[:space:]]/', $query, $matches);
         $i = 0;
+        $sql = '';
         foreach($matches as $match)
         {
             foreach($match as $k => $v)
@@ -148,7 +160,7 @@ class Search_Engine_Search
                 $query = str_replace($v, '', $query);
                 $v = str_replace('-', '', $v);
 
-                $sql .= ' '.SEARCH_ENGINE_TBL.'keywords.name NOT LIKE %s';
+                $sql .= ' se_keywords.name NOT LIKE %s';
                 if($i < (count($match) - 1))
                 {
                     $sql .= ' AND';
@@ -160,7 +172,7 @@ class Search_Engine_Search
         $query = trim($query);
         if(!empty($query))
         {
-            $sql .= ' AND '.SEARCH_ENGINE_TBL.'keywords.name LIKE %s';
+            $sql .= ' AND se_keywords.name LIKE %s';
             array_push($this->params, '%'.$query.'%');
         }
         $this->query_string .= $sql;
@@ -168,62 +180,76 @@ class Search_Engine_Search
     }
     function search_build_query($query_string)
     {
+        $this->query = $query_string;
         $search_flag = 0;//OR
-		$search_string_array = explode(" or ", strtolower($query_string));
-		if(sizeof($search_string_array) == 1){ //this presumes at least 1 OR exists in the string as an independent word		
+		$search_string_array = explode(" or ", strtolower($this->query));
+		if(sizeof($search_string_array) == 1){ //this presumes at least 1 OR exists in the string as an independent word
 			$search_flag = 1;//AND
-			$search_string_array = explode(" and ", strtolower($query_string));
-			if(sizeof($search_string_array) == 1){
-				$this->search_string = $query_string;
-				$search_string_array = explode(" ", strtolower($query_string));
-				$search_flag = 0;//JUST MOVE ON
+			$search_string_array = explode(" and ", strtolower( $this->query ));
+            $search_string_array2 = explode( '"', strtolower( $this->query ) );
+			if(sizeof($search_string_array) == 1 && sizeof( $search_string_array2 ) == 1){
+                $search_flag = apply_filters( 'search_engine_default_flag', 0 ); //JUST MOVE ON
+
+                if ( 0 == $search_flag ) {
+                    $this->search_string = $this->query;
+                    $search_string_array = explode(" ", strtolower($this->query));
 			}
 		}
-		
+		}
+
+        $this->query = preg_replace( '/[^A-Za-z0-9-\s]/Ui', '', $this->query );
+
 		if($search_flag == 1){
-			return $this->combine_and_results($search_string_array);
+			return $this->search_get_results( $this->query, $search_flag );
 		}elseif($search_flag == 0){
-			return $this->combine_or_results($search_string_array);
+			return $this->search_get_results( $this->query, $search_flag );
 		}else{ //OR should be the catch - sort of
 			//We should never actually get here...
-			return $this->combine_or_results($search_string_array);
+			return $this->search_get_results( $this->query, $search_flag );
     	}
-		
+
 		//For this search engine to handle complex queries, like "THIS AND THAT OR THEM", then regexp needs to be used.
 		//For now, the queries are assumed to be one or the other type of search (OR or AND).
 		/*
-        if(preg_match('/"([^"]+)"/', $query_string) || preg_match("/'([^']+)'/", $query_string))
+        if(preg_match('/"([^"]+)"/', $this->query) || preg_match("/'([^']+)'/", $this->query))
         {
             $this->type = 'exact';
-            $this->search_exact_query($query_string);
+            $this->search_exact_query($this->query);
         }
-        elseif(preg_match('/and/i', $query_string, $match))
+        elseif(preg_match('/and/i', $this->query, $match))
         {
             $this->type = $match[0];
-            $this->search_and_query($query_string);
+            $this->search_and_query($this->query);
         }
-        elseif(preg_match('/or/i', $query_string, $match))
+        elseif(preg_match('/or/i', $this->query, $match))
         {
             $this->type = $match[0];
-            $this->search_or_query($query_string);
+            $this->search_or_query($this->query);
         }
-        elseif(preg_match('/-[A-Za-z0-9]{1,}|-[A-Za-z0-9]{1.}[[:space:]]/', $query_string))
+        elseif(preg_match('/-[A-Za-z0-9]{1,}|-[A-Za-z0-9]{1.}[[:space:]]/', $this->query))
         {
             $this->type = 'negation';
-            $this->search_negation_query($query_string);
+            $this->search_negation_query($this->query);
         }
         else
         {
-            return $this->search_get_results($query_string);
+            return $this->search_get_results($this->query);
         }*/
         //return $this->search_get_results();
     }
-    function search_get_results($query='')
+    function search_get_results($query='', $mode=0)
     {
+        if ( is_array( $query ) )
+            $query = implode( ' ', $query );
+
+        // temporary removal of OR and AND
+        $query = str_replace( array( ' or ', ' and ', '  ' ), ' ', $query );
+
         global $wpdb;
         $limit = '';
 		// We need a local string for the query.
 		$local_query_string = "";
+        $local_query_order = "";
 
         if (0 <= $this->results_per_page)
         {
@@ -236,14 +262,15 @@ class Search_Engine_Search
         }
         if(!empty($query))
         {
-            $terms = explode(' ',$query);
+            $terms = explode(' ', strtolower( $query) );
+
 			//$this->query_string .= ' (';
             /*
 			$local_query_string = ' (';
             $sql = array();
             foreach($terms as $term)
             {
-                $sql[] .=  SEARCH_ENGINE_TBL.'keywords.name LIKE %s';
+                $sql[] .=  'se_keywords.name LIKE %s';
                 //array_push($this->params, '%'.$term.'%');
             }
 			//$this->query_string .= implode(' OR ',$sql).') ';
@@ -251,42 +278,68 @@ class Search_Engine_Search
             $terms = explode(' ',$query);
 			//$this->query_string .= ' (';
             */
-			$local_query_string = ' (';
             $sql = array();
             foreach($terms as $term)
             {
-                $sql[] .=  SEARCH_ENGINE_TBL.'keywords.name LIKE %s';
+                $trim = trim( $term );
+                if ( strlen( $trim ) < 1 )
+                    continue;
+
+                $sql[] .=  'se_keywords.name LIKE "%' . like_escape( $trim ) . '%"';
                 //array_push($this->params, '%'.$term.'%');
             }
+
 			//$this->query_string .= implode(' OR ',$sql).') ';
-			$local_query_string .= implode(' OR ',$sql).') ';
+            if ( !empty( $sql ) ) {
+                if ( 1 == $mode ) {
+                    $local_query_string = ' (' . implode( ' AND ', $sql ) . ') ';
+        }
+                else {
+                    $local_query_string = ' (' . implode( ' OR ', $sql ) . ') ';
+                    $local_query_order = ' ORDER BY (' . str_replace( 'se_keywords.name', 'se_results.title', implode( ' AND ', $sql ) ) . ') DESC,'
+                                         . ' (' . str_replace( 'se_keywords.name', 'se_results.name', implode( ' AND ', $sql ) ) . ') DESC ';
+                }
+            }
         }
         if($this->type != 'or')
         {
             //$this->query_string
             $local_query_string .= ' AND
-                                        '.SEARCH_ENGINE_TBL.'keywords.id = '.SEARCH_ENGINE_TBL.'index.keyword
+                                        se_keywords.id = se_index.keyword
                                      AND
-                                        '.SEARCH_ENGINE_TBL.'index.link = '.SEARCH_ENGINE_TBL.'links.id';
+                                        se_index.link = se_links.id';
 
         }
 
-        //$this->query_string .= ' GROUP BY '.SEARCH_ENGINE_TBL.'links.url ORDER BY '.SEARCH_ENGINE_TBL.'index.weight DESC '.$limit;
-        $local_query_string .= ' GROUP BY '.SEARCH_ENGINE_TBL.'links.url ORDER BY '.SEARCH_ENGINE_TBL.'index.weight DESC '.$limit;
-		//$this->results = $wpdb->get_results($wpdb->prepare($this->query_string.$local_query_string, $this->params));	
-		$term = '%' . $term . '%';
-        $this->results = $wpdb->get_results($wpdb->prepare($this->query_string.$local_query_string, $term));
+        //$this->query_string .= ' GROUP BY se_links.url ORDER BY se_index.weight DESC '.$limit;
+		//$this->results = $wpdb->get_results($wpdb->prepare($this->query_string.$local_query_string, $this->params));
+
+        $sql = $this->query_string . $local_query_string . ' ORDER BY se_index.weight DESC ';
+
+        $sql = ' SELECT SQL_CALC_FOUND_ROWS * FROM ( ' . str_replace( 'SQL_CALC_FOUND_ROWS', ' ', $sql ) . ' ) AS se_results GROUP BY se_results.url ' . $local_query_order . '  ' . $limit;
+        /*
+        if ( is_super_admin() && isset( $_GET[ 'debug' ] ) ) {
+            echo '<pre>';
+            var_dump( $sql );
+            echo '</pre>';
+        }*/
+
+        $this->results = $wpdb->get_results( $sql );
+
         $total = @current($wpdb->get_col('SELECT FOUND_ROWS()'));
-        if(is_array($total))
-            $this->total_results = $total['FOUND_ROWS()'];
+        if(is_array($total)) {
+            $this->total_results = (int) $total['FOUND_ROWS()'];
+            if ( $this->total_resuls < count( (array) $this->results ) )
+                $this->total_resuls = count( (array) $this->results );
+        }
         else
-            $this->total_results = $total;
+            $this->total_results = (int) $total;
         return $this->results;
     }
-        
+
     function combine_or_results($input_array){
     	$OR_results_array = array();
-    	$OR_counter_arary = array();
+    	$OR_counter_array = array();
     	foreach($input_array as $element){
 			$search_result_set = $this->search_get_results($element);
 			if(empty($OR_results_array)){
@@ -297,8 +350,8 @@ class Search_Engine_Search
 				}
 				//I can use the same results array, to save space and speed, by adding a ['frequency'] dimension
 			}else{
-				foreach($search_result_set as $search_item){	
-			    	$found=0;					
+				foreach($search_result_set as $search_item){
+			    	$found=0;
 					for($i=0; $i<sizeof($OR_results_array); $i++){
 						if($search_item->id == $OR_results_array[$i]->id){
 							$OR_results_array[$i]->weight = $OR_results_array[$i]->weight + $search_item->weight;
@@ -322,7 +375,7 @@ class Search_Engine_Search
     	$AND_results_array = array();
 		for($i=0; $i<(sizeof($input_array)-1); $i++){
 			$first_word_results = $this->search_get_results($input_array[$i]);
-			for($j=$i+1; $j<sizeof($input_array); $j++){			
+			for($j=$i+1; $j<sizeof($input_array); $j++){
 				$second_word_results = $this->search_get_results($input_array[$j]);
 				for($k=0; $k<sizeof($first_word_results); $k++){
 					for($m=0; $m<sizeof($second_word_results); $m++){
@@ -331,11 +384,11 @@ class Search_Engine_Search
 							array_push($AND_results_array,$first_word_results[$k]);
 							break;
 						}
-					}					
+					}
 				}
 			}
-		}	
-    	return $this->sort_by_weight($AND_results_array);    	
+		}
+    	return $this->sort_by_weight($AND_results_array);
     }
 
 	//DO NOT GET RID OF THIS YET.
@@ -351,24 +404,24 @@ class Search_Engine_Search
 		foreach($hollow_array as $key => $val){
 			//$key is the location (i) in the original results array.
 			$results_return_array[$i++] = $results_array[$key];
-		}	
+		}
 		return $results_return_array;
     }*/
-    
+
     function sort_by_weight($results_array){
     	$frequency_array = array();
     	if(sizeof($results_array)>0){
-	    	$frequency_array = array_fill(0,sizeof($results_array),1);    	
+	    	$frequency_array = array_fill(0,sizeof($results_array),1);
     	}
     	return $this->sort_by_weight_and_frequency($results_array,$frequency_array);
     }
-    
+
     function sort_by_weight_and_frequency($results_array,$frequency_array){
     	$id_array = array();
     	$weight_array = array();
     	for($i=0; $i<sizeof($results_array); $i++){
     		$weight_array[$i] = $results_array[$i]->weight;
-			$id_array[$i] = $results_array[$i]->id;	
+			$id_array[$i] = $results_array[$i]->id;
     	}
     	/* //UNCOMMENT THIS BLOCK TO SEE ORIGINAL WEIGHTS, FREQUENCIES AND IDS
     	print_r($id_array);
@@ -378,9 +431,9 @@ class Search_Engine_Search
     	print_r($frequency_array);
     	print('<br><br>');*/
     	if(sizeof($frequency_array) > 0){
-	    	array_multisort($frequency_array, SORT_DESC, $weight_array, SORT_DESC, $results_array);    	    	
+	    	array_multisort($frequency_array, SORT_DESC, $weight_array, SORT_DESC, $results_array);
     	}else{
-    		array_multisort($weight_array, SORT_DESC, $results_array);    	    		
+    		array_multisort($weight_array, SORT_DESC, $results_array);
     	}
 		/* //UNCOMMENT THIS BLOCK TO SEE THE NEW ID ORDER WITH CORRESPONDING WEIGHTS
 		print('ids:<br>');
@@ -390,11 +443,11 @@ class Search_Engine_Search
 		print('<br>weights:<br>');
     	for($i=0; $i<sizeof($results_array); $i++){
     		print($results_array[$i]->weight . ' ');
-    	}    	
+    	}
     	exit;*/
     	return $results_array;
     }
-    
+
     function search_do_excerpt ($content,$limit=300,$encode=true)
     {
         mb_internal_encoding(get_bloginfo('charset'));

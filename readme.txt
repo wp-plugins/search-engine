@@ -3,7 +3,7 @@ Contributors: sc0ttkclark
 Donate link: http://scottkclark.com/
 Tags: search engine, spider, index, search, google, buddypress, full search, wordpress search
 Requires at least: 2.9
-Tested up to: 3.1
+Tested up to: 3.5
 Stable tag: 0.5.7.1
 
 THIS IS A BETA VERSION - Currently in development - A search engine for WordPress that indexes ALL of your site and provides comprehensive search.
@@ -11,8 +11,6 @@ THIS IS A BETA VERSION - Currently in development - A search engine for WordPres
 == Description ==
 
 **THIS IS A BETA VERSION - Currently in development**
-
-**OFFICIAL SUPPORT** - Search Engine - Support Forums: http://scottkclark.com/forums/search-engine/
 
 This is a Search Engine for WordPress that indexes pages on a site and provides comprehensive search functionality.
 
@@ -36,8 +34,15 @@ Currently, only .htaccess password protected pages are supported, I'm currently 
 * Disallow the URI(s) with a meta robots tag w/ nofollow
 * Disallow the link(s) with a rel attribute of nofollow
 * Disallow many links within section(s) of your site by adding the class nofollow to the element tag(s)
+* Use `search_engine_noindex()` in your WP template before the `wp_head()` runs in your theme
+* Add `<meta http-equiv="X-Search-Engine-WP-Plugin" content="noindex" />` to your `<head>` blog in your page
 
 == Changelog ==
+
+= 0.5.8 =
+* Added the `search_engine_noindex()` function that can be run on any specific page/template you don't want to index, must be placed before wp_head() runs in the theme
+* Lots of bug fixes and performance updates
+* Bug fixes for WP Admin UI
 
 = 0.5.7.1 =
 * Bug fix for default site search (wasn't picking up current site if default site hadn't been set)

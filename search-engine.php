@@ -1,9 +1,9 @@
 <?php
 /*
 Plugin Name: Search Engine
-Plugin URI: http://scottkclark.com/wordpress/search-engine/
+Plugin URI: http://scottkclark.com/
 Description: THIS IS A BETA VERSION - Currently in development - A search engine for WordPress that indexes ALL of your site and provides comprehensive search.
-Version: 0.5.7.1
+Version: 0.5.8
 Author: Scott Kingsley Clark
 Author URI: http://scottkclark.com/
 
@@ -24,7 +24,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 global $wpdb;
 define('SEARCH_ENGINE_TBL',$wpdb->prefix.'searchengine_');
-define('SEARCH_ENGINE_VERSION','057');
+define('SEARCH_ENGINE_VERSION','058');
 define('SEARCH_ENGINE_URL',WP_PLUGIN_URL.'/search-engine');
 define('SEARCH_ENGINE_DIR',WP_PLUGIN_DIR.'/search-engine');
 define('SEARCH_ENGINE_XML_SITEMAPS_DIR',WP_CONTENT_DIR.'/xml-sitemaps');
@@ -56,6 +56,9 @@ function search_engine_init ()
         if($version<55)
         {
             $wpdb->query("ALTER TABLE `".SEARCH_ENGINE_TBL."templates` ADD COLUMN `disable_robots` INT unsigned AFTER `cross_scheme`");
+        }
+        if ( $version < 58 ) {
+            $wpdb->query( "ALTER TABLE `" . SEARCH_ENGINE_TBL . "links` ADD COLUMN `thumbnail` varchar(255) NOT NULL AFTER `description`" );
         }
         delete_option('search_engine_version');
         add_option('search_engine_version',SEARCH_ENGINE_VERSION);
@@ -180,16 +183,12 @@ function search_engine_wizard ()
         {
             if($existing[$row['id']]==get_bloginfo('wpurl')||strpos($existing[$row['id']],get_bloginfo('wpurl'))!==false)
                 $selected = $row['id'];
-            elseif($row['id']==$obj->row['site']&&$create==0)
-                $selected = $row['id'];
         }
     }
     if(!empty($data_index)) foreach($data_index as $row)
     {
         $existing_indexes[$row['id']] = $row['scheme'].'://'.$row['host'].$row['directory'];
         if($existing_indexes[$row['id']]==get_bloginfo('wpurl')||strpos($existing_indexes[$row['id']],get_bloginfo('wpurl'))!==false)
-            $selected_index = $row['id'];
-        elseif($row['site']==$obj->row['site']&&$create==0)
             $selected_index = $row['id'];
     }
     if($selected_index!==false)
@@ -792,6 +791,14 @@ function search_engine_groups_form ($obj)
 {
 
 }
+function search_engine_noindex_wp_head () {
+?>
+    <meta http-equiv="X-Search-Engine-WP-Plugin" content="noindex" />
+<?php
+}
+function search_engine_noindex () {
+    add_action( 'wp_head', 'search_engine_noindex_wp_head' );
+}
 function search_engine_view_index ()
 {
     require_once SEARCH_ENGINE_DIR.'/wp-admin-ui/Admin.class.php';
@@ -1128,7 +1135,8 @@ function search_engine_form ()
 function search_engine_content ($atts=false)
 {
     $time = date('Y-m-d H:i:s');
-    $css = 1;
+    $css = $form = $pagination = $result_infobar = $result_url = $output = 1;
+    $return_search = 0;
     $site_id = $site_ids = $template_ids = $site = false;
     global $search_engine;
     include_once SEARCH_ENGINE_DIR.'/classes/API.class.php';
@@ -1148,7 +1156,7 @@ function search_engine_content ($atts=false)
     }
     if($atts!==false)
     {
-        $atts = array_merge(array('sites'=>$site_id,'templates'=>false,'css'=>1),$atts);
+        $atts = array_merge(array('sites'=>$site_id,'templates'=>false,'css'=>$css,'form'=> $form, 'pagination' => $pagination, 'result_infobar' => $result_infobar, 'result_url' => $result_url, 'output' => $output, 'return_search' => $return_search), (array) $atts);
         $site_ids = array_filter(explode(',',$atts['sites']));
         $template_ids = array_filter(explode(',',$atts['templates']));
         if(!empty($template_ids))
@@ -1160,6 +1168,24 @@ function search_engine_content ($atts=false)
         $css = $atts['css'];
         if($css!=1)
             $css = 0;
+        $form = $atts[ 'form' ];
+        if ( $form != 1 )
+            $form = 0;
+        $pagination = $atts[ 'pagination' ];
+        if ( $pagination != 1 )
+            $pagination = 0;
+        $result_infobar = $atts[ 'result_infobar' ];
+        if ( $result_infobar != 1 )
+            $result_infobar = 0;
+        $result_url = $atts[ 'result_url' ];
+        if ( $result_url != 1 )
+            $result_url = 0;
+        $output = $atts[ 'output' ];
+        if ( $output != 1 )
+            $output = 0;
+        $return_search = $atts[ 'return_search' ];
+        if ( $return_search != 1 )
+            $return_search = 0;
     }
     if(empty($site_ids)&&empty($template_ids))
         return;
@@ -1182,68 +1208,78 @@ function search_engine_content ($atts=false)
         $params = array('query'=>$query,'time'=>$time,'elapsed'=>$elapsed,'results'=>$search->total_results);
         $api->log_query($params);
     }
-    if(!wp_style_is('search-engine')&&!isset($search_engine['css_output'])&&$css==1&&!defined('SEARCH_ENGINE_CUSTOM_CSS'))
-    {
-        $search_engine['css_output'] =1;
+    if ( 1 == $output ) {
+        if(!wp_style_is('search-engine')&&!isset($search_engine['css_output'])&&$css==1&&!defined('SEARCH_ENGINE_CUSTOM_CSS'))
+        {
+            $search_engine['css_output'] =1;
 ?>
 <link rel="stylesheet" type="text/css" href="<?php echo SEARCH_ENGINE_URL.'/assets/style.css'; ?>" />
 <?php
-    }
+        }
 ?>
 <div id="search_engine_Area">
+<?php if ( 1 == $form ) { ?>
 <form action="<?php echo $_SERVER['REQUEST_URI']; ?>" method="get">
     <input name="<?php echo (!wp_style_is('search-engine')?'q':'s'); ?>" type="text" size="41" class="search_engine_Box" value="<?php echo htmlentities($query,ENT_COMPAT,get_bloginfo('charset')); ?>" />
     <input type="submit" value="Search" class="search_engine_Button" /><?php if(defined('SEARCH_ENGINE_ADVANCED_URL')){ ?><br /><br /><?php if(defined('SEARCH_ENGINE_ADVANCED_HTML')){ echo SEARCH_ENGINE_ADVANCED_HTML; }else{ ?>
-    <a href="<?php echo SEARCH_ENGINE_ADVANCED_URL; ?>" class="search_engine_Advanced"><?php if(define('SEARCH_ENGINE_ADVANCED_TEXT')){ echo SEARCH_ENGINE_ADVANCED_TEXT; }else{ ?>Go to Advanced Search<?php } ?></a><?php }} ?>
+        <a href="<?php echo SEARCH_ENGINE_ADVANCED_URL; ?>" class="search_engine_Advanced"><?php if(defined('SEARCH_ENGINE_ADVANCED_TEXT')){ echo SEARCH_ENGINE_ADVANCED_TEXT; }else{ ?>Go to Advanced Search<?php } ?></a><?php }} ?>
 </form>
 <?php
-    if(0<strlen($query))
-    {
+        }
+
+        if(0<strlen($query))
+        {
+            if ( 1 == $result_infobar ) {
 ?>
 <div class="search_engine_InfoBar">
 <?php
-        $total_pages = ceil($search->total_results / $search->results_per_page);
-        $begin = ($search->results_per_page*$search->page)-($search->results_per_page-1);
-        $end = ($total_pages==$search->page?$search->total_results:($search->results_per_page*$search->page));
-        $page = $search->page;
-        $rows_per_page = $search->results_per_page;
-        $request_uri = $_SERVER['REQUEST_URI'];
-        $explode = explode('?',$request_uri);
-        $explode = @end($explode);
-        parse_str($explode,$replace);
-        if(isset($replace['pg']))
-            unset($replace['pg']);
-        if(isset($replace['submit']))
-            unset($replace['submit']);
-        $replace = http_build_query($replace);
-        $request_uri = str_replace($explode,$replace,$request_uri).'&';
+            }
+            if ( $search->total_results < count( $results ) && 0 < count( $results ) )
+                $search->total_results = count( $results );
+            $search->total_pages = ceil($search->total_results / $search->results_per_page);
+            $search->begin = ($search->results_per_page*$search->page)-($search->results_per_page-1);
+            $search->end = ($search->total_pages==$search->page?$search->total_results:($search->results_per_page*$search->page));
+            $request_uri = $_SERVER['REQUEST_URI'];
+            $explode = explode('?',$request_uri);
+            $explode = @end($explode);
+            parse_str($explode,$replace);
+            if(isset($replace['pg']))
+                unset($replace['pg']);
+            if(isset($replace['submit']))
+                unset($replace['submit']);
+            $replace = http_build_query($replace);
+            $request_uri = str_replace($explode,$replace,$request_uri).'&';
+            if ( 1 == $result_infobar ) {
 ?>
-	<p>Result<?php echo ($search->total_results==1&&!empty($results))?'':'s'; ?> <strong><?php if($search->total_results<1||empty($results)){ echo 0; } else { echo $begin; ?> - <?php echo $end; } ?></strong> of <strong><?php if($search->total_results<1||empty($results)){ echo 0; } else { echo $search->total_results; } ?></strong> for <strong><?php echo htmlentities($query,ENT_COMPAT,get_bloginfo('charset')); ?></strong></p>
+	<p>Result<?php echo ($search->total_results==1&&!empty($results))?'':'s'; ?> <strong><?php if($search->total_results<1&&empty($results)){ echo 0; } else { echo $search->begin; ?> - <?php echo $search->end; } ?></strong> of <strong><?php if($search->total_results<1&&empty($results)){ echo 0; } else { echo $search->total_results; } ?></strong> for <strong><?php echo htmlentities($query,ENT_COMPAT,get_bloginfo('charset')); ?></strong></p>
 </div>
 <?php
-        if(!empty($results))
-        {
+            }
+            if(!empty($results))
+            {
 ?>
 <ul class="search_engine_results">
 <?php
-            foreach($results as $result)
-            {
-                if(empty($result->description))
-                    $result->description = $result->fulltxt;
+                foreach($results as $result)
+                {
+                    if(empty($result->description))
+                        $result->description = $result->fulltxt;
 ?>
     <li>
         <h3 class="search_engine_Title"><a href="<?php echo $result->url; ?>"><?php echo $search->search_do_excerpt($result->title,68,false); ?></a></h3>
         <div class="search_engine_Description"><?php echo $search->search_do_excerpt($result->description); ?></div>
+        <?php if ( 1 == $result_url ) { ?>
         <cite class="search_engine_URL"><a href="<?php echo $result->url; ?>"><?php echo $search->search_do_excerpt($result->url); ?></a></cite>
+        <?php } ?>
     </li>
 <?php
-        }
+            }
 ?>
 </ul>
 <?php
-        }
-        else
-        {
+            }
+            else
+            {
 ?>
     <p class="search_engine_normal">Your search - <strong><?php echo $query; ?></strong> - did not match any documents.</p>
     <p class="search_engine_normal">Suggestions:</p>
@@ -1253,77 +1289,89 @@ function search_engine_content ($atts=false)
         <li>Try more general keywords.</li>
     </ul>
 <?php
-        }
-        if(1<$total_pages)
-        {
+            }
+            if(1<$search->total_pages && 1 == $pagination)
+            {
 ?>
 <div class="search_engine_Pagination">
 <?php
-            if (1 < $page)
-            {
-?>
-            <a href="<?php echo $request_uri; ?>pg=<?php echo $page-1; ?>" class="prev page-numbers search_engine_PrevLink">Previous</a>
-            <a href="<?php echo $request_uri; ?>pg=1" class="page-numbers">1</a>
-<?php
-            }
-            if (1 < ($page - 100))
-            {
-?>
-            <a href="<?php echo $request_uri; ?>pg=<?php echo ($page - 100); ?>" class="page-numbers"><?php echo ($page - 100); ?></a>
-<?php
-            }
-            if (1 < ($page - 10))
-            {
-?>
-            <a href="<?php echo $request_uri; ?>pg=<?php echo ($page - 10); ?>" class="page-numbers"><?php echo ($page - 10); ?></a>
-<?php
-            }
-            for ($i = 2; $i > 0; $i--)
-            {
-                if (1 < ($page - $i))
+                if (1 < $search->page)
                 {
 ?>
-            <a href="<?php echo $request_uri; ?>pg=<?php echo ($page - $i); ?>" class="page-numbers"><?php echo ($page - $i); ?></a>
-<?php
-               }
-        }
-?>
-            <span class="page-numbers current"><?php echo $page; ?></span>
-<?php
-            for ($i = 1; $i < 3; $i++)
-            {
-                if ($total_pages > ($page + $i))
-                {
-?>
-            <a href="<?php echo $request_uri; ?>pg=<?php echo ($page + $i); ?>" class="page-numbers"><?php echo ($page + $i); ?></a>
+            <a href="<?php echo $request_uri; ?>pg=<?php echo $search->page-1; ?>" class="prev page-numbers search_engine_PrevLink">Prev</a>
+            <a href="<?php echo $request_uri; ?>pg=1" class="page page-numbers">1</a>
 <?php
                 }
-            }
-            if ($total_pages > ($page + 10))
-            {
+                if (1 < ($search->page - 100))
+                {
 ?>
-            <a href="<?php echo $request_uri; ?>pg=<?php echo ($page + 10); ?>" class="page-numbers"><?php echo ($page + 10); ?></a>
+            <span class="gap">...</span>
+            <a href="<?php echo $request_uri; ?>pg=<?php echo ($search->page - 100); ?>" class="page page-numbers"><?php echo ($search->page - 100); ?></a>
+            <span class="gap">...</span>
 <?php
-            }
-            if ($total_pages > ($page + 100))
-            {
+                }
+                if (1 < ($search->page - 10))
+                {
 ?>
-            <a href="<?php echo $request_uri; ?>pg=<?php echo ($page + 100); ?>" class="page-numbers"><?php echo ($page + 100); ?></a>
+            <span class="gap">...</span>
+            <a href="<?php echo $request_uri; ?>pg=<?php echo ($search->page - 10); ?>" class="page page-numbers"><?php echo ($search->page - 10); ?></a>
+            <span class="gap">...</span>
 <?php
-            }
-            if ($page < $total_pages)
-            {
+                }
+                for ($i = 2; $i > 0; $i--)
+                {
+                    if (1 < ($search->page - $i))
+                    {
 ?>
-            <a href="<?php echo $request_uri; ?>pg=<?php echo $total_pages; ?>" class="page-numbers"><?php echo $total_pages; ?></a>
-            <a href="<?php echo $request_uri; ?>pg=<?php echo $page+1; ?>" class="next page-numbers search_engine_NextLink">Next</a>
+            <a href="<?php echo $request_uri; ?>pg=<?php echo ($search->page - $i); ?>" class="page page-numbers"><?php echo ($search->page - $i); ?></a>
 <?php
-            }
+                    }
+                }
+?>
+            <span class="page page-numbers current"><?php echo $search->page; ?></span>
+<?php
+                for ($i = 1; $i < 3; $i++)
+                {
+                    if ($search->total_pages > ($search->page + $i))
+                    {
+?>
+            <a href="<?php echo $request_uri; ?>pg=<?php echo ($search->page + $i); ?>" class="page page-numbers"><?php echo ($search->page + $i); ?></a>
+<?php
+                    }
+                }
+                if ($search->total_pages > ($search->page + 10))
+                {
+?>
+            <span class="gap">...</span>
+            <a href="<?php echo $request_uri; ?>pg=<?php echo ($search->page + 10); ?>" class="page page-numbers"><?php echo ($search->page + 10); ?></a>
+            <span class="gap">...</span>
+<?php
+                }
+                if ($search->total_pages > ($search->page + 100))
+                {
+?>
+            <span class="gap">...</span>
+            <a href="<?php echo $request_uri; ?>pg=<?php echo ($search->page + 100); ?>" class="page page-numbers"><?php echo ($search->page + 100); ?></a>
+            <span class="gap">...</span>
+<?php
+                }
+                if ($search->page < $search->total_pages)
+                {
+?>
+            <a href="<?php echo $request_uri; ?>pg=<?php echo $search->total_pages; ?>" class="page page-numbers"><?php echo $search->total_pages; ?></a>
+            <a href="<?php echo $request_uri; ?>pg=<?php echo $search->page+1; ?>" class="next page-numbers search_engine_NextLink">Next</a>
+<?php
+                }
 ?>
 </div>
 <?php
+            }
         }
-    }
 ?>
 </div>
 <?php
+    }
+
+    if ( 1== $return_search )
+        return $search;
 }
