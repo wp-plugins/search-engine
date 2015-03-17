@@ -10,10 +10,11 @@ if(!is_object($wpdb))
     ob_end_clean();
 }
 // FOR EXPORTS ONLY
-if(isset($_GET['download']) && !isset($_GET['page']) && is_user_logged_in() && isset($_GET['_wpnonce']) && false === wp_verify_nonce($_GET['_wpnonce'], 'wp-admin-ui-export'))
+if(isset($_GET['download']) && !isset($_GET['page']) && is_user_logged_in() && isset($_GET['_wpnonce']) && false !== wp_verify_nonce($_GET['_wpnonce'], 'wp-admin-ui-export'))
 {
     do_action('wp_admin_ui_export_download');
     $file = WP_CONTENT_DIR.'/exports/'.str_replace('/','',$_GET['export']);
+    $file = realpath( $file );
     if(!isset($_GET['export'])||empty($_GET['export'])||!file_exists($file))
         die('File not found.');
     // required for IE, otherwise Content-disposition is ignored
@@ -44,7 +45,7 @@ if(isset($_GET['download']) && !isset($_GET['page']) && is_user_logged_in() && i
  *
  * @package Admin UI for Plugins
  *
- * @version 1.9.2
+ * @version 1.9.3
  * @author Scott Kingsley Clark
  * @link http://scottkclark.com/
  *
@@ -111,6 +112,7 @@ class WP_Admin_UI
 
     // export related
     var $export_dir = false;
+    var $exported_file = false;
     var $export_url = false;
     var $export_type = false;
     var $export_delimiter = false;
@@ -119,30 +121,37 @@ class WP_Admin_UI
     {
         do_action('wp_admin_ui_pre_init',$options);
         $options = $this->do_hook('options',$options);
-        $this->base_url = WP_CONTENT_URL.str_replace(WP_CONTENT_DIR,'',__FILE__);
+        $this->base_url = plugins_url( 'Admin.class.php', __FILE__  );
         $this->export_dir = WP_CONTENT_DIR.'/exports';
         $this->export_url = $this->base_url.'?download=1&_wpnonce='.wp_create_nonce('wp-admin-ui-export').'&export=';
         $this->assets_url = str_replace('/Admin.class.php','',$this->base_url).'/assets';
         if(false!==$this->get_var('id'))
-            $this->id = $_GET['id'];
+            $this->id = sanitize_text_field( $_GET['id'] );
         if(false!==$this->get_var('action',false,array('add','edit','duplicate','view','delete','manage','reorder','export')))
-            $this->action = $_GET['action'];
+            $this->action = sanitize_text_field( $_GET['action'] );
         if(false!==$this->get_var('do',false,array('save','create')))
-            $this->do = $_GET['do'];
+            $this->do = sanitize_text_field( $_GET['do'] );
         if(false!==$this->get_var('search_query'))
-            $this->search_query = $_GET['search_query'];
+            $this->search_query = sanitize_text_field( $_GET['search_query'] );
         if(false!==$this->get_var('pg'))
-            $this->page = $_GET['pg'];
+            $this->page = absint( $_GET['pg'] );
         if(false!==$this->get_var('limit'))
-            $this->limit = $_GET['limit'];
-        if(false!==$this->get_var('order'))
-            $this->order = $_GET['order'];
+            $this->limit = absint( $_GET['limit'] );
+        if(false!==$this->get_var('order')) {
+	        $order = sanitize_text_field( $_GET[ 'order' ] );
+	        $order = preg_replace( "/([- ])/", "_", trim( $order ) );
+		    $order = preg_replace( "/([^0-9a-z_])/", "", strtolower( $order ) );
+		    $order = preg_replace( "/(_){2,}/", "_", $order );
+
+	        $this->order = $order;
+        }
         if(false!==$this->get_var('order_dir',false,array('ASC','DESC')))
-            $this->order_dir = $_GET['order_dir'];
+            $this->order_dir = ('ASC'==$_GET['order_dir']?'ASC':'DESC');
         if(false!==$this->get_var('action',false,'export')&&false!==$this->get_var('export_type',false,array('csv','tsv','pipe','custom','xml','json')))
             $this->export_type = $_GET['export_type'];
         if(false!==$this->get_var('action',false,'export')&&'custom'==$this->export_type&&false!==$this->get_var('export_delimiter'))
             $this->export_delimiter = $_GET['export_delimiter'];
+
         if(false!==$options&&!empty($options))
         {
             if(!is_array($options))
@@ -1180,7 +1189,7 @@ class WP_Admin_UI
         {
             if($this->export_type=='csv')
             {
-                $export_file = str_replace('-','_',sanitize_title($this->items)).'_'.date_i18n('m-d-Y_h-i-sa').'.csv';
+                $export_file = str_replace('-','_',sanitize_title($this->items)).'_'.date_i18n('m-d-Y_H-i-s').'_'.wp_generate_password(5,false).'.csv';
                 $fp = fopen($this->export_dir.'/'.$export_file,'a+');
                 $head = array();
                 $first = true;
@@ -1224,7 +1233,7 @@ class WP_Admin_UI
             }
             elseif($this->export_type=='tsv')
             {
-                $export_file = str_replace('-','_',sanitize_title($this->items)).'_'.date_i18n('m-d-Y_h-i-sa').'.tsv';
+                $export_file = str_replace('-','_',sanitize_title($this->items)).'_'.date_i18n('m-d-Y_H-i-s').'_'.wp_generate_password(5,false).'.tsv';
                 $fp = fopen($this->export_dir.'/'.$export_file,'a+');
                 $head = array();
                 $first = true;
@@ -1268,7 +1277,7 @@ class WP_Admin_UI
             }
             elseif($this->export_type=='pipe')
             {
-                $export_file = str_replace('-','_',sanitize_title($this->items)).'_'.date_i18n('m-d-Y_h-i-sa').'.txt';
+                $export_file = str_replace('-','_',sanitize_title($this->items)).'_'.date_i18n('m-d-Y_H-i-s').'_'.wp_generate_password(5,false).'.txt';
                 $fp = fopen($this->export_dir.'/'.$export_file,'a+');
                 $head = array();
                 $first = true;
@@ -1312,7 +1321,7 @@ class WP_Admin_UI
             }
             elseif($this->export_type=='custom')
             {
-                $export_file = str_replace('-','_',sanitize_title($this->items)).'_'.date_i18n('m-d-Y_h-i-sa').'.txt';
+                $export_file = str_replace('-','_',sanitize_title($this->items)).'_'.date_i18n('m-d-Y_H-i-s').'_'.wp_generate_password(5,false).'.txt';
                 $fp = fopen($this->export_dir.'/'.$export_file,'a+');
                 $head = array();
                 $first = true;
@@ -1356,7 +1365,7 @@ class WP_Admin_UI
             }
             elseif($this->export_type=='xml')
             {
-                $export_file = str_replace('-','_',sanitize_title($this->items)).'_'.date_i18n('m-d-Y_h-i-sa').'.xml';
+                $export_file = str_replace('-','_',sanitize_title($this->items)).'_'.date_i18n('m-d-Y_H-i-s').'_'.wp_generate_password(5,false).'.xml';
                 $fp = fopen($this->export_dir.'/'.$export_file,'a+');
                 $head = '<'.'?'.'xml version="1.0" encoding="'.get_bloginfo('charset').'" '.'?'.'>'."\r\n<items count=\"".count($this->full_data)."\">\r\n";
                 $head = substr($head,0,-1);
@@ -1388,7 +1397,7 @@ class WP_Admin_UI
             }
             elseif($this->export_type=='json')
             {
-                $export_file = str_replace('-','_',sanitize_title($this->items)).'_'.date_i18n('m-d-Y_h-i-sa').'.json';
+                $export_file = str_replace('-','_',sanitize_title($this->items)).'_'.date_i18n('m-d-Y_H-i-s').'_'.wp_generate_password(5,false).'.json';
                 $fp = fopen($this->export_dir.'/'.$export_file,'a+');
                 $data = array('items'=>array('count'=>count($this->full_data),'item'=>array()));
                 foreach($this->full_data as $item)
@@ -1420,6 +1429,9 @@ class WP_Admin_UI
                 return false;
             }
         }
+
+	    $this->exported_file = $export_file;
+
         $this->do_hook('post_export',$export_file);
     }
     function get_row ($id=false)
@@ -1498,7 +1510,7 @@ class WP_Admin_UI
         }
         if(is_array($totals))
             $calc_found_sql .= ' '.implode(',',$totals).', ';
-        $sql = preg_replace('/ SELECT /'," SELECT {$calc_found_sql} ", preg_replace('/ SELECT SQL_CALC_FOUND_ROWS /',' SELECT ',$sql, 1), 1);
+        $sql = preg_replace('/ SELECT /i'," SELECT {$calc_found_sql} ", preg_replace('/ SELECT SQL_CALC_FOUND_ROWS /i',' SELECT ',$sql, 1), 1);
         $wheresql = $havingsql = $ordersql = $limitsql = '';
         $other_sql = $having_sql = array();
         if ($full || false !== $this->sql_count)
@@ -1977,7 +1989,7 @@ jQuery(document).ready(function(){
 ?>
         <div class="tablenav-pages">
             Show per page:<?php $this->limit(); ?> &nbsp;|&nbsp;
-<?php $this->pagination(); ?>
+<?php $this->pagination( true ); ?>
         </div>
 <?php
         }
@@ -2118,7 +2130,7 @@ jQuery(document).ready(function(){
 table.widefat.fixed tbody.sortable tr { height:50px; }
 .dragme {
     background: url(<?php echo $this->assets_url; ?>/move.png) no-repeat;
-    background-position:8px 5px;
+    background-position:8px 8px;
     cursor:pointer;
 }
 .dragme strong { margin-left:30px; }
@@ -2132,7 +2144,7 @@ table.widefat.fixed tbody.sortable tr { height:50px; }
         if(false===$this->$column_index||empty($this->$column_index))
             return $this->error('<strong>Error:</strong> Invalid Configuration - Missing "columns" definition.');
 ?>
-<table class="widefat page fixed admin_ui_table" cellspacing="0"<?php echo ($reorder==1&&$this->reorder?' id="admin_ui_reorder"':''); ?>>
+<table class="widefat page fixed admin_ui_table wp-list-table" cellspacing="0"<?php echo ($reorder==1&&$this->reorder?' id="admin_ui_reorder"':''); ?>>
     <thead>
         <tr>
 <?php
@@ -2356,81 +2368,71 @@ jQuery(document).ready(function(){
 </script>
 <?php
     }
-    function pagination ()
-    {
+
+    /**
+     * @param bool $header
+     *
+     * @return mixed
+     */
+    public function pagination ( $header = false ) {
         $this->do_hook('pagination');
         if(isset($this->custom['pagination'])&&function_exists("{$this->custom['pagination']}"))
             return call_user_func( $this->custom['pagination'],$this);
+
         $page = $this->page;
         $rows_per_page = $this->limit;
         $total_rows = $this->total;
         $total_pages = ceil($total_rows / $rows_per_page);
-        $request_uri = $this->var_update(array('pg'=>''),array('limit','order','order_dir','search_query')).'&';
-        $begin = ($rows_per_page*$page)-($rows_per_page-1);
-        $end = ($total_pages==$page?$total_rows:($rows_per_page*$page));
-?>
-			<span class="displaying-num">Displaying <?php if($total_rows<1){ echo 0; } else { echo $begin; ?>&#8211;<?php echo $end; } ?> of <?php echo $total_rows; ?></span>
-<?php
-        if (1 < $page)
-        {
-?>
-            <a href="<?php echo $request_uri; ?>pg=<?php echo $page-1; ?>" class="prev page-numbers">&laquo;</a>
-            <a href="<?php echo $request_uri; ?>pg=1" class="page-numbers">1</a>
-<?php
+
+        $request_uri = $this->var_update(array('pg'=>''),array('limit','order','order_dir','search_query'));
+
+        $append = false;
+
+        if ( false !== strpos( $request_uri, '?' ) )
+            $append = true;
+
+        if ( $header || 1 != $total_rows ) {
+            $singular_label = strtolower( $this->item );
+            $plural_label = strtolower( $this->items );
+            ?>
+        <span class="displaying-num"><?php echo number_format_i18n( $total_rows ) . ' ' . _n( $singular_label, $plural_label, $total_rows ) ?></span>
+        <?php
         }
-        if (1 < ($page - 100))
-        {
-?>
-            <a href="<?php echo $request_uri; ?>pg=<?php echo ($page - 100); ?>" class="page-numbers"><?php echo ($page - 100); ?></a>
-<?php
-        }
-        if (1 < ($page - 10))
-        {
-?>
-            <a href="<?php echo $request_uri; ?>pg=<?php echo ($page - 10); ?>" class="page-numbers"><?php echo ($page - 10); ?></a>
-<?php
-        }
-        for ($i = 2; $i > 0; $i--)
-        {
-            if (1 < ($page - $i))
-            {
-?>
-            <a href="<?php echo $request_uri; ?>pg=<?php echo ($page - $i); ?>" class="page-numbers"><?php echo ($page - $i); ?></a>
-<?php
-           }
+
+		if ( 1 < $total_pages ) {
+			?>
+		<a class="first-page<?php echo ( 1 < $this->page ) ? '' : ' disabled'; ?>" title="<?php _e( 'Go to the first page' ); ?>" href="<?php echo $request_uri . ( $append ? '&' : '?' ) . 'pg' . '=1'; ?>">&laquo;</a>
+		<a class="prev-page<?php echo ( 1 < $this->page ) ? '' : ' disabled'; ?>" title="<?php _e( 'Go to the previous page' ); ?>" href="<?php echo $request_uri . ( $append ? '&' : '?' ) . 'pg' . '=' . max( $this->page - 1, 1 ); ?>">&lsaquo;</a>
+		<?php
+			if ( true == $header ) {
+				?>
+			<span class="paging-input"><input class="current-page" title="<?php _e( 'Current page' ); ?>" type="text" name="pg<?php echo $this->num; ?>" value="<?php echo $this->page; ?>" size="<?php echo strlen( $total_pages ); ?>"> <?php _e( 'of' ); ?> <span class="total-pages"><?php echo $total_pages; ?></span></span>
+			<script>
+
+				jQuery( document ).ready( function ( $ ) {
+					var pageInput = $( 'input.current-page' );
+					var currentPage = pageInput.val();
+					pageInput.closest( 'form' ).submit( function ( e ) {
+						if ( (1 > $( 'select[name="action"]' ).length || $( 'select[name="action"]' ).val() == -1) && (1 > $( 'select[name="action_bulk"]' ).length || $( 'select[name="action_bulk"]' ).val() == -1) && pageInput.val() == currentPage ) {
+							pageInput.val( '1' );
+						}
+					} );
+				} );
+			</script>
+			<?php
+			}
+			else {
+				?>
+			<span class="paging-input"><?php echo $this->page; ?> <?php _e( 'of' ); ?> <span class="total-pages"><?php echo number_format_i18n( $total_pages ); ?></span></span>
+			<?php
+			}
+			?>
+		<a class="next-page<?php echo ( $this->page < $total_pages ) ? '' : ' disabled'; ?>" title="<?php _e( 'Go to the next page' ); ?>" href="<?php echo $request_uri . ( $append ? '&' : '?' ) . 'pg' . '=' . min( $this->page + 1, $total_pages ); ?>">&rsaquo;</a>
+		<a class="last-page<?php echo ( $this->page < $total_pages ) ? '' : ' disabled'; ?>" title="<?php _e( 'Go to the last page' ); ?>'" href="<?php echo $request_uri . ( $append ? '&' : '?' ) . 'pg' . '=' . $total_pages; ?>">&raquo;</a>
+		<?php
+		}
     }
-?>
-            <span class="page-numbers current"><?php echo $page; ?></span>
-<?php
-        for ($i = 1; $i < 3; $i++)
-        {
-            if ($total_pages > ($page + $i))
-            {
-?>
-            <a href="<?php echo $request_uri; ?>pg=<?php echo ($page + $i); ?>" class="page-numbers"><?php echo ($page + $i); ?></a>
-<?php
-            }
-        }
-        if ($total_pages > ($page + 10))
-        {
-?>
-            <a href="<?php echo $request_uri; ?>pg=<?php echo ($page + 10); ?>" class="page-numbers"><?php echo ($page + 10); ?></a>
-<?php
-        }
-        if ($total_pages > ($page + 100))
-        {
-?>
-            <a href="<?php echo $request_uri; ?>pg=<?php echo ($page + 100); ?>" class="page-numbers"><?php echo ($page + 100); ?></a>
-<?php
-        }
-        if ($page < $total_pages)
-        {
-?>
-            <a href="<?php echo $request_uri; ?>pg=<?php echo $total_pages; ?>" class="page-numbers"><?php echo $total_pages; ?></a>
-            <a href="<?php echo $request_uri; ?>pg=<?php echo $page+1; ?>" class="next page-numbers">&raquo;</a>
-<?php
-        }
-    }
+
     function limit ($options=false)
     {
         $this->do_hook('limit',$options);
